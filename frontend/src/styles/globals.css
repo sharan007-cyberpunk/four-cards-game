@@ -172,3 +172,4 @@
     min-height: 40px;
   }
 }
+.turn-countdown{font:800 10px Manrope;color:var(--primary);margin-left:2px;min-width:18px;text-align:center}

@@ -15,5 +15,6 @@ public record PublicGameState(
     int targetScore,
     int roundNumber,
     String message,
+    Long turnEndsAt,
     Long openingEndsAt
 ) {}

@@ -122,6 +122,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
             <>
               <span className="pulse-dot"/>
               YOUR TURN
+              {state.turnEndsAt && <TurnCountdown endsAt={state.turnEndsAt}/>}
             </>
           ) : (
             <>
@@ -160,24 +161,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
 
         <div className="table-center">
           <div className="table-light"/>
-
-          {/* Dedicated, immutable Joker zone. It has no click/drag handlers. */}
-          <div className="joker-zone" aria-label="Immutable Joker card">
-            <div className="joker-zone-label">
-              <LockKeyhole size={10}/>
-              JOKER CENTER
-            </div>
-
-            {joker ? (
-              <JokerCard card={joker}/>
-            ) : (
-              <div className="joker-empty">JOKER</div>
-            )}
-
-            <span className="joker-rule">
-              {state.jokerRank || '—'} MATCHING RANK = 0
-            </span>
-          </div>
 
           <div className="piles">
             <div
@@ -223,6 +206,24 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 <div/>
                 <div/>
               </div>
+            </div>
+
+            {/* Immutable Joker: visually positioned immediately to the right of the draw deck. */}
+            <div className="joker-zone" aria-label="Immutable Joker card">
+              <div className="joker-zone-label">
+                <LockKeyhole size={10}/>
+                JOKER
+              </div>
+
+              {joker ? (
+                <JokerCard card={joker}/>
+              ) : (
+                <div className="joker-empty">JOKER</div>
+              )}
+
+              <span className="joker-rule">
+                {state.jokerRank || '—'} = 0
+              </span>
             </div>
           </div>
 
@@ -519,6 +520,15 @@ function PlayingCard({
       {!small && <em>{value ?? ''}</em>}
     </button>
   );
+}
+
+function TurnCountdown({endsAt}) {
+  const [left, setLeft] = useState(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
+  useEffect(() => {
+    const timer = setInterval(() => setLeft(Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))), 200);
+    return () => clearInterval(timer);
+  }, [endsAt]);
+  return <strong className="turn-countdown">{left}s</strong>;
 }
 
 function Countdown({endsAt}) {

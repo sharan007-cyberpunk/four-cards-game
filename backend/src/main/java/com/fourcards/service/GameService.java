@@ -19,6 +19,10 @@ public class GameService {
 
     private final Map<String, GameRuntime> rooms = new ConcurrentHashMap<>();
     private final Set<String> scheduledBots = ConcurrentHashMap.newKeySet();
+    private final Set<String> scheduledTurnTimeouts = ConcurrentHashMap.newKeySet();
+    private final Set<String> scheduledDisconnects = ConcurrentHashMap.newKeySet();
+    private final long turnSeconds;
+    private final long disconnectGraceSeconds;
 
     private final GameEngine engine;
     private final SimpMessagingTemplate messaging;
@@ -29,11 +33,15 @@ public class GameService {
 
     public GameService(
             @Value("${app.opening-seconds:10}") long seconds,
+            @Value("${app.turn-seconds:15}") long turnSeconds,
+            @Value("${app.disconnect-grace-seconds:10}") long disconnectGraceSeconds,
             SimpMessagingTemplate messaging,
             PersistedGameRepository games,
             PersistedRoundRepository rounds
     ) {
-        this.engine = new GameEngine(seconds);
+        this.turnSeconds = Math.max(1L, turnSeconds);
+        this.disconnectGraceSeconds = Math.max(1L, disconnectGraceSeconds);
+        this.engine = new GameEngine(seconds, this.turnSeconds);
         this.messaging = messaging;
         this.games = games;
         this.rounds = rounds;
@@ -158,6 +166,7 @@ public class GameService {
 
         engine.start(game);
         broadcastAll(game);
+        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
@@ -194,29 +203,40 @@ public class GameService {
         }
 
         GameRuntime game = requireRoom(code);
-        engine.drop(game, request.playerId(), request.cardCodes());
-        broadcastAll(game);
+        synchronized (game) {
+            engine.drop(game, request.playerId(), request.cardCodes());
+            broadcastAll(game);
+        }
+        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
     public void drawDeck(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        engine.drawDeck(game, pid);
-        broadcastAll(game);
+        synchronized (game) {
+            engine.drawDeck(game, pid);
+            broadcastAll(game);
+        }
+        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
     public void takeDrop(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        engine.takeDrop(game, pid);
-        broadcastAll(game);
+        synchronized (game) {
+            engine.takeDrop(game, pid);
+            broadcastAll(game);
+        }
+        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
     public void open(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        engine.open(game, pid);
-        broadcastAll(game);
+        synchronized (game) {
+            engine.open(game, pid);
+            broadcastAll(game);
+        }
 
         long delay = Math.max(
                 0L,
@@ -252,9 +272,12 @@ public class GameService {
             throw new IllegalStateException("Round is not complete");
         }
 
-        engine.nextRound(game);
-        persistRound(game);
-        broadcastAll(game);
+        synchronized (game) {
+            engine.nextRound(game);
+            persistRound(game);
+            broadcastAll(game);
+        }
+        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
@@ -547,63 +570,141 @@ public class GameService {
 
     public void reconnect(String code, String pid) {
         GameRuntime game = requireRoom(code);
-
-        if (game.phase != GamePhase.LOBBY
-                && game.phase != GamePhase.ROUND_RESULT) {
-            throw new IllegalStateException(
-                    "Reconnect is available between rounds"
-            );
+        synchronized (game) {
+            PlayerRuntime p = game.player(pid);
+            if (p.status == PlayerStatus.ELIMINATED) {
+                throw new IllegalStateException("Player is eliminated");
+            }
+            p.status = PlayerStatus.CONNECTED;
+            // If this was the current player's disconnect grace period, keep the
+            // same turn and the original server deadline. Never reset the timer.
+            broadcastAll(game);
         }
+        scheduleTurnTimeout(game);
+    }
 
-        PlayerRuntime p = game.player(pid);
-        if (p.status == PlayerStatus.ELIMINATED) {
-            throw new IllegalStateException("Player is eliminated");
+    public void connectWebSocket(String pid, String sessionId) {
+        if (pid == null || sessionId == null) return;
+        for (GameRuntime game : rooms.values()) {
+            PlayerRuntime p = game.players.stream().filter(x -> x.id.equals(pid)).findFirst().orElse(null);
+            if (p != null) {
+                synchronized (game) {
+                    p.websocketSessionId = sessionId;
+                    if (p.status != PlayerStatus.ELIMINATED) p.status = PlayerStatus.CONNECTED;
+                    broadcastAll(game);
+                }
+                scheduleTurnTimeout(game);
+                return;
+            }
         }
-
-        p.status = PlayerStatus.CONNECTED;
-        broadcast(game, p.name + " reconnected");
     }
 
     public void disconnectPlayerFromAll(String pid) {
+        disconnectPlayerFromAll(pid, null);
+    }
+
+    public void disconnectPlayerFromAll(String pid, String sessionId) {
         for (GameRuntime game : rooms.values()) {
-            if (game.players.stream().anyMatch(p -> p.id.equals(pid))) {
-                disconnect(game.roomCode, pid);
+            PlayerRuntime p = game.players.stream().filter(x -> x.id.equals(pid)).findFirst().orElse(null);
+            if (p != null) {
+                if (sessionId != null && p.websocketSessionId != null && !sessionId.equals(p.websocketSessionId)) return;
+                disconnect(game.roomCode, pid, sessionId);
                 return;
             }
         }
     }
 
     public void disconnect(String code, String pid) {
+        disconnect(code, pid, null);
+    }
+
+    public void disconnect(String code, String pid, String sessionId) {
         GameRuntime game = rooms.get(code.toUpperCase(Locale.ROOT));
-        if (game == null) {
-            return;
-        }
+        if (game == null) return;
 
-        PlayerRuntime p = game.player(pid);
+        synchronized (game) {
+            PlayerRuntime p = game.player(pid);
+            if (p.status == PlayerStatus.ELIMINATED) return;
+            if (sessionId != null && p.websocketSessionId != null && !sessionId.equals(p.websocketSessionId)) return;
 
-        if (game.phase == GamePhase.LOBBY) {
+            if (sessionId == null || Objects.equals(p.websocketSessionId, sessionId)) {
+                p.websocketSessionId = null;
+            }
             p.status = PlayerStatus.DISCONNECTED;
-            broadcast(game, p.name + " disconnected");
-            return;
+
+            if (game.phase == GamePhase.LOBBY) {
+                broadcast(game, p.name + " disconnected");
+                return;
+            }
+
+            if (game.phase == GamePhase.PLAYING && game.currentPlayer() != null
+                    && game.currentPlayer().id.equals(pid)) {
+                scheduleDisconnectTimeout(game, pid);
+                broadcastAll(game);
+                return;
+            }
+
+            broadcastAll(game);
         }
-
-        if (p.status == PlayerStatus.ELIMINATED) {
-            return;
-        }
-
-        p.status = PlayerStatus.DISCONNECTED;
-
-        if (game.currentPlayer() != null
-                && game.currentPlayer().id.equals(pid)) {
-            game.advanceTurn();
-        }
-
-        if (game.activePlayers().size() <= 1) {
-            game.phase = GamePhase.GAME_OVER;
-        }
-
-        broadcastAll(game);
         scheduleBotIfNeeded(game);
+    }
+
+    private void scheduleDisconnectTimeout(GameRuntime game, String pid) {
+        String key = game.roomCode + ":" + pid;
+        if (!scheduledDisconnects.add(key)) return;
+
+        long delay = Math.max(0L, Duration.between(Instant.now(), Instant.now().plusSeconds(disconnectGraceSeconds)).toMillis());
+        scheduler.schedule(() -> {
+            try {
+                synchronized (game) {
+                    PlayerRuntime p = game.player(pid);
+                    if (p.status != PlayerStatus.DISCONNECTED) return;
+                    if (game.phase == GamePhase.PLAYING && game.currentPlayer() != null
+                            && game.currentPlayer().id.equals(pid)) {
+                        game.advanceTurn(turnSeconds);
+                        game.message = p.name + " timed out and the turn was skipped";
+                        broadcastAll(game);
+                    }
+                }
+                scheduleTurnTimeout(game);
+                scheduleBotIfNeeded(game);
+            } finally {
+                scheduledDisconnects.remove(key);
+            }
+        }, delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void scheduleTurnTimeout(GameRuntime game) {
+        if (game.phase != GamePhase.PLAYING || game.turnEndsAt == null || game.currentPlayer() == null) return;
+        String pid = game.currentPlayer().id;
+        String key = game.roomCode + ":" + pid + ":" + game.turnEndsAt.toEpochMilli();
+        if (!scheduledTurnTimeouts.add(key)) return;
+
+        long delay = Math.max(0L, Duration.between(Instant.now(), game.turnEndsAt).toMillis());
+        scheduler.schedule(() -> {
+            try {
+                synchronized (game) {
+                    if (game.phase != GamePhase.PLAYING || game.currentPlayer() == null
+                            || !game.currentPlayer().id.equals(pid)
+                            || game.turnEndsAt == null || game.turnEndsAt.toEpochMilli() != Long.parseLong(key.substring(key.lastIndexOf(':') + 1))) {
+                        return;
+                    }
+                    PlayerRuntime current = game.currentPlayer();
+                    if (current.status == PlayerStatus.DISCONNECTED) {
+                        // Disconnect grace owns the resolution path.
+                        scheduleDisconnectTimeout(game, pid);
+                        return;
+                    }
+                    game.message = current.name + " ran out of time — turn skipped";
+                    game.advanceTurn(turnSeconds);
+                    broadcastAll(game);
+                }
+                scheduleTurnTimeout(game);
+                scheduleBotIfNeeded(game);
+            } finally {
+                scheduledTurnTimeouts.remove(key);
+            }
+        }, delay, TimeUnit.MILLISECONDS);
     }
 
     // =========================================================
@@ -710,6 +811,7 @@ public class GameService {
                 g.targetScore,
                 g.roundNumber,
                 g.message,
+                g.turnEndsAt == null ? null : g.turnEndsAt.toEpochMilli(),
                 g.openingEndsAt == null
                         ? null
                         : g.openingEndsAt.toEpochMilli()

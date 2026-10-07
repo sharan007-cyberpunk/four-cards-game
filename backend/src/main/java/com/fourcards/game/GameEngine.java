@@ -6,10 +6,14 @@ import java.util.*;
 
 public class GameEngine {
   private final long openingSeconds;
+  private final long turnSeconds;
 
-  public GameEngine(long openingSeconds) {
+  public GameEngine(long openingSeconds, long turnSeconds) {
     this.openingSeconds = openingSeconds;
+    this.turnSeconds = turnSeconds;
   }
+
+  public GameEngine(long openingSeconds) { this(openingSeconds, 15); }
 
   public synchronized void start(GameRuntime g) {
     if (g.players.size() < 3 || g.players.size() > 6)
@@ -54,7 +58,7 @@ public class GameEngine {
     g.dealerIndex = indexOfActive(g, dealer);
     g.turnIndex = g.dealerIndex;
     g.phase = GamePhase.PLAYING;
-    g.beginTurn();
+    g.beginTurn(turnSeconds);
     g.message = "Round " + g.roundNumber + " started — Joker " + g.jokerRank.symbol;
   }
 
@@ -137,7 +141,7 @@ public class GameEngine {
 
   private void afterDraw(GameRuntime g) {
     g.mustDrawAfterDrop = false;
-    g.advanceTurn();
+    g.advanceTurn(turnSeconds);
     g.message = "Turn complete";
   }
 
@@ -148,7 +152,11 @@ public class GameEngine {
     if (g.mustDrawAfterDrop)
       throw new IllegalStateException("You must draw after dropping");
 
+    if (g.openingPlayerId != null)
+      throw new IllegalStateException("Opening is already in progress");
+
     g.phase = GamePhase.OPEN_CONFIRMATION;
+    g.turnEndsAt = null;
     g.openingPlayerId = pid;
     g.openingEndsAt = Instant.now().plusSeconds(openingSeconds);
     g.message = g.player(pid).name + " opened";
@@ -218,8 +226,11 @@ public class GameEngine {
 
   private void eliminateAtTarget(GameRuntime g) {
     for (PlayerRuntime p : g.players) {
-      if (p.status != PlayerStatus.ELIMINATED && p.score >= g.targetScore)
+      if (p.status != PlayerStatus.ELIMINATED && p.score >= g.targetScore) {
         p.status = PlayerStatus.ELIMINATED;
+        p.hand.clear();
+        p.websocketSessionId = null;
+      }
     }
   }
 
