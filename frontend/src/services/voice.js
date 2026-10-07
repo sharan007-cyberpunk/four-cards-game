@@ -1,32 +1,61 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
+/**
+ * WebRTC voice:
+ * - STOMP carries signaling metadata only (SDP/ICE/presence).
+ * - Audio is always carried by RTCPeerConnection.
+ * - A TURN server can be supplied for restrictive NATs.
+ *
+ * Vite:
+ *   VITE_STUN_URL=stun:stun.l.google.com:19302
+ *   VITE_TURN_URL=turn:your-turn-host:3478
+ *   VITE_TURN_USERNAME=...
+ *   VITE_TURN_CREDENTIAL=...
+ */
 const ICE_SERVERS = [
-  {urls: 'stun:stun.l.google.com:19302'},
-  {urls: 'stun:stun1.l.google.com:19302'}
+  {urls: import.meta.env.VITE_STUN_URL || 'stun:stun.l.google.com:19302'},
+  ...(import.meta.env.VITE_TURN_URL
+    ? [{
+        urls: import.meta.env.VITE_TURN_URL,
+        username: import.meta.env.VITE_TURN_USERNAME || '',
+        credential: import.meta.env.VITE_TURN_CREDENTIAL || ''
+      }]
+    : [])
 ];
 
-export function useVoiceChat(roomCode, playerId, players = [], enabled = true, onError = () => {}) {
+export function useVoiceChat(
+  roomCode,
+  playerId,
+  players = [],
+  enabled = true,
+  onError = () => {}
+) {
   const [active, setActive] = useState(false);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [remoteStatus, setRemoteStatus] = useState({});
 
   const localStream = useRef(null);
   const peers = useRef(new Map());
   const audios = useRef(new Map());
-  const subscription = useRef(null);
+  const pendingCandidates = useRef(new Map());
+  const subscriptions = useRef([]);
   const clientRef = useRef(null);
+  const remoteAnalysers = useRef(new Map());
+  const speakingLastSent = useRef(false);
   const speakingTimer = useRef(null);
 
-  const humans = players.filter(p =>
-    p.id !== playerId &&
-    !p.bot &&
-    p.status === 'CONNECTED'
+  const humans = useMemo(
+    () => players.filter(
+      p => p.id !== playerId && !p.bot && p.status === 'CONNECTED'
+    ),
+    [players, playerId]
   );
 
   const sendSignal = useCallback((payload) => {
     const client = clientRef.current || window.__fourCardsClient;
-    if (!client?.connected) return;
+    if (!client?.connected || !roomCode || !playerId) return;
 
     client.publish({
       destination: `/app/room/${roomCode}/voice`,
@@ -37,25 +66,99 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
     });
   }, [roomCode, playerId]);
 
-  const closePeer = useCallback((id) => {
-    const pc = peers.current.get(id);
+  const closePeer = useCallback((remoteId) => {
+    const pc = peers.current.get(remoteId);
     if (pc) {
       pc.ontrack = null;
       pc.onicecandidate = null;
+      pc.onconnectionstatechange = null;
       pc.close();
-      peers.current.delete(id);
+      peers.current.delete(remoteId);
     }
 
-    const audio = audios.current.get(id);
+    pendingCandidates.current.delete(remoteId);
+
+    const audio = audios.current.get(remoteId);
     if (audio) {
       audio.pause();
       audio.srcObject = null;
-      audios.current.delete(id);
+      audios.current.delete(remoteId);
+    }
+
+    const analyser = remoteAnalysers.current.get(remoteId);
+    if (analyser) {
+      cancelAnimationFrame(analyser.raf);
+      analyser.source?.disconnect?.();
+      analyser.context?.close?.();
+      remoteAnalysers.current.delete(remoteId);
+    }
+
+    setRemoteStatus(current => {
+      const next = {...current};
+      delete next[remoteId];
+      return next;
+    });
+  }, []);
+
+  const createRemoteAudioAnalyser = useCallback((remoteId, stream) => {
+    if (remoteAnalysers.current.has(remoteId)) return;
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    try {
+      const context = new AudioContextClass();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      const source = context.createMediaStreamSource(stream);
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const value of data) {
+          const n = (value - 128) / 128;
+          sum += n * n;
+        }
+        const isSpeaking = Math.sqrt(sum / data.length) > 0.045;
+        setRemoteStatus(current => {
+          if (current[remoteId]?.speaking === isSpeaking) return current;
+          return {
+            ...current,
+            [remoteId]: {...current[remoteId], speaking: isSpeaking}
+          };
+        });
+        const raf = requestAnimationFrame(tick);
+        const entry = remoteAnalysers.current.get(remoteId);
+        if (entry) entry.raf = raf;
+      };
+
+      const entry = {context, analyser, source, raf: 0};
+      remoteAnalysers.current.set(remoteId, entry);
+      tick();
+    } catch {
+      // Audio still works without the analyser.
+    }
+  }, []);
+
+  const flushCandidates = useCallback(async (remoteId, pc) => {
+    const queued = pendingCandidates.current.get(remoteId) || [];
+    pendingCandidates.current.delete(remoteId);
+
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        // Ignore stale ICE candidates; the connection can continue with others.
+      }
     }
   }, []);
 
   const createPeer = useCallback(async (remoteId, initiator) => {
-    if (!active || !localStream.current) return null;
+    if (!active || !localStream.current || !remoteId || remoteId === playerId) {
+      return null;
+    }
 
     let pc = peers.current.get(remoteId);
     if (pc) return pc;
@@ -79,19 +182,28 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
     };
 
     pc.ontrack = event => {
+      const stream = event.streams?.[0];
+      if (!stream) return;
+
       let audio = audios.current.get(remoteId);
       if (!audio) {
         audio = new Audio();
         audio.autoplay = true;
+        audio.playsInline = true;
         audios.current.set(remoteId, audio);
       }
-      audio.srcObject = event.streams[0];
+
+      audio.srcObject = stream;
       audio.muted = deafened;
-      audio.play().catch(() => {});
+      audio.play().catch(() => {
+        // Browser may require a user gesture before remote playback.
+      });
+
+      createRemoteAudioAnalyser(remoteId, stream);
     };
 
     pc.onconnectionstatechange = () => {
-      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+      if (['failed', 'closed'].includes(pc.connectionState)) {
         closePeer(remoteId);
       }
     };
@@ -102,6 +214,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
         offerToReceiveVideo: false
       });
       await pc.setLocalDescription(offer);
+
       sendSignal({
         toPlayerId: remoteId,
         type: 'offer',
@@ -110,16 +223,45 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
     }
 
     return pc;
-  }, [active, closePeer, deafened, sendSignal]);
+  }, [
+    active,
+    closePeer,
+    createRemoteAudioAnalyser,
+    deafened,
+    playerId,
+    sendSignal
+  ]);
 
-  const handleSignal = useCallback(async (signal) => {
-    if (!active || !signal || signal.toPlayerId !== playerId) return;
+  const handleSignal = useCallback(async signal => {
+    if (!active || !signal || (signal.toPlayerId && signal.toPlayerId !== playerId)) return;
+
+    const remoteId = signal.fromPlayerId;
+    if (!remoteId || remoteId === playerId) return;
+
+    // Presence is useful even when a peer has not enabled voice yet.
+    if (signal.type === 'presence' || signal.type === 'mute') {
+      setRemoteStatus(current => ({
+        ...current,
+        [remoteId]: {
+          ...(current[remoteId] || {}),
+          micEnabled: signal.micEnabled !== false,
+          speaking: Boolean(signal.speaking)
+        }
+      }));
+      return;
+    }
+
+    if (signal.type === 'leave') {
+      closePeer(remoteId);
+      return;
+    }
 
     try {
-      const remoteId = signal.fromPlayerId;
       let pc = peers.current.get(remoteId);
 
       if (signal.type === 'hello') {
+        // Deterministic initiator: only the lexicographically smaller id
+        // creates the offer, preventing offer glare.
         if (playerId < remoteId) {
           await createPeer(remoteId, true);
         }
@@ -132,6 +274,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
           type: 'offer',
           sdp: signal.sdp
         });
+        await flushCandidates(remoteId, pc);
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -141,6 +284,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
           type: 'answer',
           sdp: answer.sdp
         });
+        return;
       }
 
       if (signal.type === 'answer') {
@@ -149,11 +293,20 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
           type: 'answer',
           sdp: signal.sdp
         });
+        await flushCandidates(remoteId, pc);
+        return;
       }
 
       if (signal.type === 'candidate') {
-        if (!pc) {
-          pc = await createPeer(remoteId, false);
+        if (!pc || !pc.remoteDescription) {
+          const queue = pendingCandidates.current.get(remoteId) || [];
+          queue.push({
+            candidate: signal.candidate,
+            sdpMid: signal.sdpMid,
+            sdpMLineIndex: signal.sdpMLineIndex
+          });
+          pendingCandidates.current.set(remoteId, queue);
+          return;
         }
 
         await pc.addIceCandidate({
@@ -162,12 +315,21 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
           sdpMLineIndex: signal.sdpMLineIndex
         });
       }
-    } catch (error) {
-      onError('Voice connection could not be established.');
+    } catch {
+      closePeer(remoteId);
+      onError('Voice connection could not be established. Check your network or TURN configuration.');
     }
-  }, [active, createPeer, onError, playerId, sendSignal]);
+  }, [
+    active,
+    closePeer,
+    createPeer,
+    flushCandidates,
+    onError,
+    playerId,
+    sendSignal
+  ]);
 
-  // Wait for the existing STOMP game client and subscribe to voice signaling.
+  // Attach to the existing STOMP client. Reattach after STOMP reconnects.
   useEffect(() => {
     if (!roomCode || !playerId || !enabled) return undefined;
 
@@ -176,6 +338,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
 
     const attach = () => {
       if (cancelled) return;
+
       const client = window.__fourCardsClient;
       if (!client?.connected) {
         timer = window.setTimeout(attach, 250);
@@ -183,32 +346,49 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
       }
 
       clientRef.current = client;
-      subscription.current?.unsubscribe?.();
-      subscription.current = client.subscribe(
-        `/topic/rooms/${roomCode}/voice`,
-        message => {
-          handleSignal(JSON.parse(message.body));
-        }
-      );
+      subscriptions.current.forEach(s => s.unsubscribe?.());
+      subscriptions.current = [
+        client.subscribe(`/topic/rooms/${roomCode}/voice`, message => {
+          try {
+            handleSignal(JSON.parse(message.body));
+          } catch {
+            onError('Invalid voice signaling message.');
+          }
+        })
+      ];
     };
+
+    const onConnected = event => {
+      if (event.detail?.client === window.__fourCardsClient) attach();
+    };
+
+    const onClosed = () => {
+      subscriptions.current.forEach(s => s.unsubscribe?.());
+      subscriptions.current = [];
+      clientRef.current = null;
+    };
+
+    window.addEventListener('fourcards:stomp-connected', onConnected);
+    window.addEventListener('fourcards:stomp-closed', onClosed);
 
     attach();
 
     return () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
-      subscription.current?.unsubscribe?.();
-      subscription.current = null;
+      window.removeEventListener('fourcards:stomp-connected', onConnected);
+      window.removeEventListener('fourcards:stomp-closed', onClosed);
+      subscriptions.current.forEach(s => s.unsubscribe?.());
+      subscriptions.current = [];
       clientRef.current = null;
     };
-  }, [enabled, handleSignal, playerId, roomCode]);
+  }, [enabled, handleSignal, onError, playerId, roomCode]);
 
-  // Keep peers aligned with the currently connected human players.
   useEffect(() => {
     if (!active) return;
 
     humans.forEach(remote => {
-      if (playerId < remote.id) {
+      if (playerId < remote.id && !peers.current.has(remote.id)) {
         createPeer(remote.id, true).catch(() => {});
       }
     });
@@ -223,8 +403,13 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
   const enable = useCallback(async () => {
     if (active) return;
 
+    if (!window.isSecureContext && location.hostname !== 'localhost') {
+      onError('Live voice requires HTTPS. Please open the deployed game over HTTPS.');
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
-      onError('Live voice requires a secure connection (HTTPS) or localhost.');
+      onError('This browser does not provide microphone access.');
       return;
     }
 
@@ -239,45 +424,77 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
       });
 
       localStream.current = stream;
+      stream.getAudioTracks().forEach(track => { track.enabled = true; });
+
       setMuted(false);
       setActive(true);
-      // Announce presence so peers that enabled voice earlier can renegotiate.
-      window.setTimeout(() => sendSignal({type: 'hello'}), 50);
-    } catch {
-      onError('Microphone permission was denied or is unavailable.');
+
+      window.setTimeout(() => {
+        sendSignal({
+          type: 'hello'
+        });
+        sendSignal({
+          type: 'presence',
+          micEnabled: true,
+          speaking: false
+        });
+      }, 50);
+    } catch (error) {
+      if (error?.name === 'NotAllowedError') {
+        onError('Microphone permission was denied. Allow microphone access and try again.');
+      } else {
+        onError('Microphone is unavailable. Check browser permissions and your device.');
+      }
     }
   }, [active, onError, sendSignal]);
 
   const disable = useCallback(() => {
+    sendSignal({
+      type: 'leave',
+      toPlayerId: null,
+      micEnabled: false,
+      speaking: false
+    });
+
     localStream.current?.getTracks().forEach(track => track.stop());
     localStream.current = null;
 
-    peers.current.forEach((_, id) => closePeer(id));
-    peers.current.clear();
+    [...peers.current.keys()].forEach(id => closePeer(id));
 
     setActive(false);
     setMuted(false);
     setSpeaking(false);
-  }, [closePeer]);
+    setRemoteStatus({});
+  }, [closePeer, sendSignal]);
 
   const toggleMute = useCallback(() => {
     if (!localStream.current) return;
+
     const next = !muted;
     localStream.current.getAudioTracks().forEach(track => {
       track.enabled = !next;
     });
+
     setMuted(next);
-  }, [muted]);
+    sendSignal({
+      type: 'mute',
+      micEnabled: !next,
+      speaking: false
+    });
+  }, [muted, sendSignal]);
 
   const toggleDeafen = useCallback(() => {
     const next = !deafened;
+
     audios.current.forEach(audio => {
       audio.muted = next;
     });
+
     setDeafened(next);
   }, [deafened]);
 
-  // Small local mic activity indicator.
+  // Local speaking detection. Only state transitions are signaled to peers,
+  // avoiding a continuous STOMP stream.
   useEffect(() => {
     if (!active || !localStream.current) return undefined;
 
@@ -301,15 +518,28 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
         analyser.getByteTimeDomainData(data);
         let sum = 0;
         for (const value of data) {
-          const normalized = (value - 128) / 128;
-          sum += normalized * normalized;
+          const n = (value - 128) / 128;
+          sum += n * n;
         }
-        setSpeaking(Math.sqrt(sum / data.length) > 0.045 && !muted);
+
+        const next = Math.sqrt(sum / data.length) > 0.045 && !muted;
+        setSpeaking(next);
+
+        if (next !== speakingLastSent.current) {
+          speakingLastSent.current = next;
+          sendSignal({
+            type: 'presence',
+            micEnabled: !muted,
+            speaking: next
+          });
+        }
+
         raf = requestAnimationFrame(tick);
       };
+
       tick();
     } catch {
-      // Voice itself still works if the analyser is unavailable.
+      // Voice itself remains usable.
     }
 
     return () => {
@@ -319,7 +549,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
       context?.close?.();
       if (speakingTimer.current) clearTimeout(speakingTimer.current);
     };
-  }, [active, muted]);
+  }, [active, muted, sendSignal]);
 
   useEffect(() => () => disable(), [disable]);
 
@@ -328,6 +558,7 @@ export function useVoiceChat(roomCode, playerId, players = [], enabled = true, o
     muted,
     deafened,
     speaking,
+    remoteStatus,
     enable,
     disable,
     toggleMute,

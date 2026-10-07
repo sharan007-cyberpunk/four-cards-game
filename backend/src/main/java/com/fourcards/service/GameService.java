@@ -371,9 +371,9 @@ public class GameService {
     private void botDraw(GameRuntime game, PlayerRuntime bot) {
         boolean take = false;
 
-        if (!game.dropPile.isEmpty()) {
-            Card top = game.dropPile.peek();
-            int topValue = top.value(game.jokerRank);
+        if (game.previousTopDropCard != null && game.dropPile.contains(game.previousTopDropCard)) {
+            Card drawable = game.previousTopDropCard;
+            int drawableValue = drawable.value(game.jokerRank);
             int bestHandValue = bot.hand.stream()
                     .mapToInt(c -> c.value(game.jokerRank))
                     .max()
@@ -381,8 +381,8 @@ public class GameService {
 
             take = switch (bot.botDifficulty) {
                 case EASY -> game.random.nextBoolean();
-                case NORMAL -> topValue <= Math.min(6, bestHandValue);
-                case HARD -> topValue == 0 || topValue <= bestHandValue;
+                case NORMAL -> drawableValue <= Math.min(6, bestHandValue);
+                case HARD -> drawableValue == 0 || drawableValue <= bestHandValue;
             };
         }
 
@@ -484,27 +484,60 @@ public class GameService {
 
     public void broadcastVoice(
             String code,
+            String authenticatedPlayerId,
             VoiceSignal signal
     ) {
         GameRuntime game = requireRoom(code);
 
-        if (signal == null || signal.fromPlayerId() == null) {
+        if (authenticatedPlayerId == null || authenticatedPlayerId.isBlank()) {
+            throw new IllegalArgumentException("Missing player identity");
+        }
+
+        if (signal == null || signal.type() == null || signal.type().isBlank()) {
             throw new IllegalArgumentException("Invalid voice signal");
         }
 
-        if (game.players.stream().noneMatch(
-                p -> p.id.equals(signal.fromPlayerId()))) {
-            throw new IllegalArgumentException("Voice sender is not in this room");
+        // Never trust fromPlayerId supplied by the browser.
+        PlayerRuntime sender = game.players.stream()
+                .filter(p -> p.id.equals(authenticatedPlayerId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Voice sender is not in this room"
+                ));
+
+        if (signal.toPlayerId() != null) {
+            game.players.stream()
+                    .filter(p -> p.id.equals(signal.toPlayerId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Voice recipient is not in this room"
+                    ));
         }
 
-        if (signal.toPlayerId() != null && game.players.stream().noneMatch(
-                p -> p.id.equals(signal.toPlayerId()))) {
-            throw new IllegalArgumentException("Voice recipient is not in this room");
+        // Only signaling/presence metadata travels through STOMP. No audio
+        // payload is accepted by the server.
+        Set<String> allowed = Set.of(
+                "hello", "offer", "answer", "candidate", "leave", "presence", "mute"
+        );
+        if (!allowed.contains(signal.type())) {
+            throw new IllegalArgumentException("Unsupported voice signal type");
         }
+
+        VoiceSignal serverSignal = new VoiceSignal(
+                sender.id,
+                signal.toPlayerId(),
+                signal.type(),
+                signal.sdp(),
+                signal.candidate(),
+                signal.sdpMid(),
+                signal.sdpMLineIndex(),
+                signal.micEnabled(),
+                signal.speaking()
+        );
 
         messaging.convertAndSend(
                 "/topic/rooms/" + game.roomCode + "/voice",
-                signal
+                serverSignal
         );
     }
 
@@ -659,7 +692,11 @@ public class GameService {
 
         String top = g.dropPile.isEmpty()
                 ? null
-                : g.dropPile.peek().code();
+                : g.dropPile.peekFirst().code();
+
+        CardDto joker = g.jokerCard == null || g.jokerRank == null
+                ? null
+                : CardDto.of(g.jokerCard.physicalCard(), g.jokerRank);
 
         return new PublicGameState(
                 g.roomCode,
@@ -668,6 +705,7 @@ public class GameService {
                 cur == null ? null : cur.id,
                 top,
                 g.jokerRank == null ? null : g.jokerRank.symbol,
+                joker,
                 g.deck == null ? 0 : g.deck.size(),
                 g.targetScore,
                 g.roundNumber,

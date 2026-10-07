@@ -67,9 +67,14 @@ public class GameWebSocketController {
     @MessageMapping("/room/{code}/voice")
     public void voice(
             @DestinationVariable String code,
-            VoiceSignal signal
+            VoiceSignal signal,
+            org.springframework.messaging.simp.SimpMessageHeaderAccessor accessor
     ) {
-        service.broadcastVoice(code, signal);
+        String playerId = accessor.getUser() == null
+                ? null
+                : accessor.getUser().getName();
+
+        service.broadcastVoice(code, playerId, signal);
     }
 
     @SubscribeMapping("/room/{code}/private")
