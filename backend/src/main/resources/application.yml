@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/fourcards}
+    username: ${DATABASE_USERNAME:fourcards}
+    password: ${DATABASE_PASSWORD:fourcards}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+server:
+  port: ${PORT:8080}
+app:
+  cors-origins: ${CORS_ORIGINS:http://localhost:5173}
+  opening-seconds: 10

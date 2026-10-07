@@ -1,0 +1,5 @@
+import {Client} from '@stomp/stompjs';
+import {useEffect,useMemo} from 'react';
+import {API} from './api.js';
+const WS=import.meta.env.VITE_WS_URL||API.replace(/^http/,'ws')+'/ws';
+export function useGameSocket(roomCode,playerId,onPublic,onPrivate,onError){useEffect(()=>{if(!roomCode||!playerId)return;const client=new Client({brokerURL:WS,connectHeaders:{'player-id':playerId},reconnectDelay:1500,debug:()=>{}});client.onConnect=()=>{window.__fourCardsClient=client;client.subscribe(`/topic/rooms/${roomCode}`,m=>onPublic(JSON.parse(m.body)));client.subscribe('/user/queue/private',m=>onPrivate(JSON.parse(m.body)));};client.onStompError=f=>onError(f.headers?.message||'WebSocket error');client.onWebSocketClose=()=>onPublic({connection:'disconnected'});client.activate();return()=>{window.__fourCardsClient=null;client.deactivate();};},[roomCode,playerId]);return useMemo(()=>({send:(destination,body)=>{if(!window.__fourCardsClient?.connected)return onError('Connection is not ready.');window.__fourCardsClient.publish({destination:`/app${destination}`,body:JSON.stringify(body)});}}),[onError]);}
