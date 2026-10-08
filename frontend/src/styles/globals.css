@@ -552,3 +552,9 @@
   .tilt-a { transform: rotate(-18deg) translate(-72px,-5px); }
   .tilt-c { transform: rotate(22deg) translate(80px,10px); }
 }
+
+.sound-toggle{min-height:36px;padding:0 10px;border:1px solid var(--border);background:rgba(255,255,255,.035);color:var(--muted);border-radius:10px;display:flex;align-items:center;gap:6px;font-size:9px;font-weight:800;letter-spacing:.08em;transition:.2s ease}
+.sound-toggle:hover{border-color:var(--border-strong);color:var(--text);background:rgba(255,255,255,.06)}
+.sound-toggle.on{color:var(--primary);border-color:rgba(214,184,106,.24);background:rgba(214,184,106,.055)}
+@media(max-width:900px){.sound-toggle{min-height:34px;padding:0 9px}.sound-toggle span{display:none}}
+@media(max-width:600px){.sound-toggle{width:36px;height:36px;padding:0;justify-content:center}.sound-toggle span{display:none}}

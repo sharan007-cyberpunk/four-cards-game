@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import {Avatar} from './common.jsx';
 import {useVoiceChat} from '../services/voice.js';
+import {useGameSounds} from '../services/sounds.js';
 
 function GameScreen({room, state, privateState, socket, error, setError}) {
   const [selected, setSelected] = useState([]);
@@ -20,6 +21,8 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
   const open = state?.phase === 'OPEN_CONFIRMATION';
   const result = state?.phase === 'ROUND_RESULT';
   const over = state?.phase === 'GAME_OVER';
+
+  const sounds = useGameSounds({state, privateState, room, onError: setError});
 
   const voice = useVoiceChat(
     room.roomCode,
@@ -89,6 +92,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
     }
 
     action('drop', {cardCodes});
+    sounds.play('card');
     setSelected([]);
     setDragCode(null);
   };
@@ -139,6 +143,8 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
           Connected
         </div>
 
+        <SoundToggle enabled={sounds.enabled} onToggle={() => sounds.setEnabled(!sounds.enabled)} />
+
         <VoicePanel
           voice={voice}
           players={state.players || []}
@@ -170,10 +176,11 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               role="button"
               tabIndex={legal.includes('TAKE_DROP') ? 0 : -1}
               aria-label="Take previous drop card"
-              onClick={() => legal.includes('TAKE_DROP') && action('take')}
+              onClick={() => { if (legal.includes('TAKE_DROP')) { sounds.play('take'); action('take'); } }}
               onKeyDown={e => {
                 if ((e.key === 'Enter' || e.key === ' ') && legal.includes('TAKE_DROP')) {
                   e.preventDefault();
+                  sounds.play('take');
                   action('take');
                 }
               }}
@@ -240,10 +247,11 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               role="button"
               tabIndex={legal.includes('DRAW_DECK') ? 0 : -1}
               aria-label="Draw from deck"
-              onClick={() => legal.includes('DRAW_DECK') && action('draw')}
+              onClick={() => { if (legal.includes('DRAW_DECK')) { sounds.play('draw'); action('draw'); } }}
               onKeyDown={e => {
                 if ((e.key === 'Enter' || e.key === ' ') && legal.includes('DRAW_DECK')) {
                   e.preventDefault();
+                  sounds.play('draw');
                   action('draw');
                 }
               }}
@@ -390,6 +398,21 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
         </div>
       )}
     </main>
+  );
+}
+
+
+function SoundToggle({enabled, onToggle}) {
+  return (
+    <button
+      className={`sound-toggle ${enabled ? 'on' : ''}`}
+      onClick={onToggle}
+      title={enabled ? 'Turn game sounds off' : 'Turn game sounds on'}
+      aria-label={enabled ? 'Turn game sounds off' : 'Turn game sounds on'}
+    >
+      {enabled ? <Volume2 size={14}/> : <VolumeX size={14}/>}
+      <span>{enabled ? 'SFX' : 'SFX OFF'}</span>
+    </button>
   );
 }
 
