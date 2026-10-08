@@ -13,7 +13,7 @@ public class GameEngine {
   }
   public synchronized void startRound(GameRuntime g) {
     List<PlayerRuntime> active=g.activePlayers(); if(active.size()<=1){g.phase=GamePhase.GAME_OVER;return;}
-    g.roundNumber++; g.roundWinnerId=null; g.roundWinnerName=null; g.roundWinnerHandScore=null; g.deck=Deck.standardShuffled(g.random); g.dropPile.clear(); g.previousDropCard=null;
+    g.roundNumber++; g.deck=Deck.standardShuffled(g.random); g.dropPile.clear(); g.previousDropCard=null;
     // Remove one real card from the deck and reserve it as the immutable Joker for this round.
     g.jokerCard=g.deck.draw();
     g.jokerRank=g.jokerCard.rank();
@@ -63,18 +63,9 @@ public class GameEngine {
     for(PlayerRuntime p:g.activePlayers()) scores.put(p,g.scorer.score(p.hand,g.jokerRank));
     int lowest=scores.values().stream().min(Integer::compareTo).orElse(openerScore); boolean success=openerScore<=lowest;
     for(var e:scores.entrySet()) e.getKey().score += (e.getKey()==opener ? (success?0:40) : (success?e.getValue():0));
-    if(success){ g.roundWinnerId=opener.id; g.roundWinnerName=opener.name; g.roundWinnerHandScore=openerScore; }
     eliminateAtTarget(g); g.phase=GamePhase.ROUND_RESULT; g.message=success?opener.name+" won the round":"Opening failed — +40 penalty";
     g.openingEndsAt=null; g.openingPlayerId=null;
-    if(g.activePlayers().size()<=1){
-      PlayerRuntime winner=g.activePlayers().isEmpty()?null:g.activePlayers().get(0);
-      g.phase=GamePhase.GAME_OVER;
-      if(winner!=null){
-        g.finalWinnerId=winner.id;
-        g.finalWinnerName=winner.name;
-        g.message="Winner is "+winner.name;
-      }
-    }
+    if(g.activePlayers().size()<=1) g.phase=GamePhase.GAME_OVER;
   }
   public synchronized void nextRound(GameRuntime g){
     if(g.phase!=GamePhase.ROUND_RESULT) throw new IllegalStateException("Round is not complete");

@@ -7,7 +7,7 @@ public class GameRuntime {
   public final String roomCode; public final List<PlayerRuntime> players = new ArrayList<>();
   public final Random random = new Random(); public final ScoreCalculator scorer = new ScoreCalculator();
   public GamePhase phase = GamePhase.LOBBY; public int targetScore=50; public int roundNumber=0; public int dealerIndex=0; public int turnIndex=0;
-  public Deck deck; public final Deque<Card> dropPile = new ArrayDeque<>(); public Card jokerCard; public Rank jokerRank; public Card previousDropCard; public String message=""; public Instant openingEndsAt; public String openingPlayerId; public boolean mustDrawAfterDrop; public String roundWinnerId; public String roundWinnerName; public Integer roundWinnerHandScore; public String finalWinnerId; public String finalWinnerName;
+  public Deck deck; public final Deque<Card> dropPile = new ArrayDeque<>(); public Card jokerCard; public Rank jokerRank; public Card previousDropCard; public String message=""; public Instant openingEndsAt; public String openingPlayerId; public boolean mustDrawAfterDrop;
   public GameRuntime(String roomCode) { this.roomCode=roomCode; }
   public PlayerRuntime player(String id) { return players.stream().filter(p -> p.id.equals(id)).findFirst().orElseThrow(() -> new IllegalArgumentException("Player not found")); }
   public List<PlayerRuntime> activePlayers() { return players.stream().filter(PlayerRuntime::active).toList(); }

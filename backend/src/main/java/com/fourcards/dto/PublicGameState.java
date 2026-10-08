@@ -16,10 +16,5 @@ public record PublicGameState(
         int targetScore,
         int roundNumber,
         String message,
-        Long openingEndsAt,
-        String roundWinnerId,
-        String roundWinnerName,
-        Integer roundWinnerHandScore,
-        String finalWinnerId,
-        String finalWinnerName
+        Long openingEndsAt
 ) {}

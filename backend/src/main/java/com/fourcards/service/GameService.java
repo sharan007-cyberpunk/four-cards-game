@@ -681,12 +681,7 @@ public class GameService {
                 g.targetScore,
                 g.roundNumber,
                 g.message,
-                g.openingEndsAt == null ? null : g.openingEndsAt.toEpochMilli(),
-                g.roundWinnerId,
-                g.roundWinnerName,
-                g.roundWinnerHandScore,
-                g.finalWinnerId,
-                g.finalWinnerName
+                g.openingEndsAt == null ? null : g.openingEndsAt.toEpochMilli()
         );
     }
 
