@@ -168,24 +168,16 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
 
           <div className="piles">
             <div className="pile-wrap previous-drop-wrap">
-              <span className="pile-label">PREVIOUS DROP <b>TAKE</b></span>
+              <span className="pile-label">PREVIOUS DROP <b>VISIBLE</b></span>
               {state.topDropCard ? (
-                <button
-                  className={`clickable-pile ${myTurn && legal.includes('TAKE_DROP') ? 'clickable' : ''}`}
-                  disabled={!myTurn || !legal.includes('TAKE_DROP')}
-                  aria-label="Take previous drop"
-                  onClick={() => action('take')}
-                >
-                  <PlayingCard code={state.topDropCard} small nonInteractive/>
-                </button>
+                <PlayingCard code={state.topDropCard} small nonInteractive/>
               ) : (
                 <div className="empty-pile">PREVIOUS DROP</div>
               )}
-              {myTurn && legal.includes('TAKE_DROP') && <small className="click-hint">Click to take</small>}
             </div>
 
             <div
-              className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''} ${state.pendingDropCards?.length ? 'has-pending' : ''}`}
+              className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''}`}
               onDragOver={e => {
                 if (myTurn && legal.includes('DROP')) {
                   e.preventDefault();
@@ -198,40 +190,17 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 if (code) drop([code]);
               }}
             >
-              <span className="pile-label">DROP AREA <b>{state.pendingDropCards?.length ? 'WAITING FOR DRAW' : 'CURRENT TURN'}</b></span>
-              {state.pendingDropCards?.length ? (
-                <div className="pending-drop-cards" aria-label="Cards dropped this turn">
-                  {state.pendingDropCards.map((card, index) => (
-                    <PlayingCard
-                      key={`${card.code}-${index}`}
-                      code={card.code}
-                      small
-                      nonInteractive
-                      index={index}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="drop-target">
-                  <span>DROP</span>
-                  <strong>YOUR CARD</strong>
-                </div>
-              )}
-              {myTurn && legal.includes('DROP') && !state.pendingDropCards?.length && <small className="drop-hint">Drag a card here</small>}
-              {myTurn && state.pendingDropCards?.length > 0 && <small className="drop-hint">Choose the previous drop or deck</small>}
+              <span className="pile-label">DROP AREA <b>CURRENT TURN</b></span>
+              <div className="drop-target">
+                <span>DROP</span>
+                <strong>YOUR CARD</strong>
+              </div>
+              {myTurn && legal.includes('DROP') && <small className="drop-hint">Drag a card here</small>}
             </div>
 
             <div className="pile-wrap deck-wrap">
               <span className="pile-label">DRAW DECK <b>{state.deckCount}</b></span>
-              <button
-                className={`clickable-deck ${myTurn && legal.includes('DRAW_DECK') ? 'clickable' : ''}`}
-                disabled={!myTurn || !legal.includes('DRAW_DECK')}
-                aria-label="Draw from deck"
-                onClick={() => action('draw')}
-              >
-                <div className="deck-back" aria-hidden="true"><div/><div/></div>
-              </button>
-              {myTurn && legal.includes('DRAW_DECK') && <small className="click-hint">Click to draw</small>}
+              <div className="deck-back" aria-label="Draw deck"><div/><div/></div>
             </div>
 
             <div className="joker-zone" aria-label="Immutable Joker card">
@@ -277,7 +246,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 code={card.code}
                 className={dealing ? 'deal-in' : ''}
                 style={dealing ? {animationDelay: `${index * 180}ms`} : undefined}
-                value={state.showHandScores ? card.value : undefined}
+                value={card.value}
                 selected={selected.includes(card.code)}
                 onClick={() => toggle(card)}
                 index={index}
@@ -327,6 +296,15 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
             ) : (
               <>
                 <button
+                  className="btn action-secondary"
+                  disabled={!myTurn || !legal.includes('TAKE_DROP')}
+                  onClick={() => action('take')}
+                >
+                  <span>Take</span>
+                  <small>PREVIOUS DROP</small>
+                </button>
+
+                <button
                   className="btn primary drop-btn"
                   disabled={!myTurn || !legal.includes('DROP') || !canDropSelected}
                   onClick={() => drop()}
@@ -335,6 +313,15 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                     ? `${selected.length} card${selected.length > 1 ? 's' : ''}`
                     : ''}
                   <span>→</span>
+                </button>
+
+                <button
+                  className="btn action-secondary"
+                  disabled={!myTurn || !legal.includes('DRAW_DECK')}
+                  onClick={() => action('draw')}
+                >
+                  <span>Draw</span>
+                  <small>FROM DECK</small>
                 </button>
 
                 {legal.includes('OPEN') && (
@@ -443,16 +430,6 @@ function Opponent({player, active, compact, voiceStatus}) {
               : `Score ${player.score}`}
         </span>
       </div>
-
-      {player.status !== 'ELIMINATED' && player.handSize > 0 && (
-        <div className="opponent-hand" aria-label={`${player.handSize} hidden cards`}>
-          {Array.from({length: player.handSize}, (_, i) => (
-            <div key={i} className="face-down-card" aria-hidden="true">
-              <span>♠</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="opponent-voice" aria-label={voiceSpeaking ? 'Speaking' : voiceLive ? 'Mic on' : 'Voice off'}>
         {voiceSpeaking ? <Radio size={12}/> : voiceLive ? <Mic size={12}/> : <MicOff size={12}/>}
@@ -564,32 +541,23 @@ function Countdown({endsAt}) {
 
 function RoundResult({state, room, action}) {
   const me = state.players.find(p => p.id === room.playerId);
-  const failed = state.openingSuccess === false;
-  const lowest = state.players.find(p => p.id === state.lowestScorePlayerId);
-  const loser = state.players.find(p => p.id === state.openingLoserId);
 
   return (
     <div className="overlay">
       <div className="result-modal">
         <div className="result-icon"><Sparkles/></div>
         <span className="eyebrow center">ROUND COMPLETE</span>
-        <h2>{failed ? 'OPEN FAILED' : 'ROUND RESOLVED'}</h2>
+        <h2>
+          {state.message.includes('failed')
+            ? 'OPEN FAILED'
+            : 'ROUND RESOLVED'}
+        </h2>
+        <p>{state.message}</p>
 
-        {failed ? (
-          <div className="opening-failure">
-            <strong>{lowest?.name || 'Another player'} had the lowest score: {state.lowestScore ?? 0} pts</strong>
-            <span>{loser?.name || 'The opener'} lost the round and received +40 points.</span>
-          </div>
-        ) : (
-          <p>{state.message}</p>
-        )}
-
-        <div className="results-list round-results">
-          <div className="result-head"><span>PLAYER</span><b>ROUND</b><b>TOTAL</b></div>
+        <div className="results-list">
           {state.players.map(p => (
-            <div key={p.id} className={p.id === state.openingLoserId ? 'round-loser' : ''}>
+            <div key={p.id}>
               <span>{p.name}</span>
-              <b>{p.roundScore ?? 0}</b>
               <b>{p.score}</b>
             </div>
           ))}
@@ -601,7 +569,7 @@ function RoundResult({state, room, action}) {
           </button>
         )}
 
-        <small>Round points are shown first. Total is the cumulative score.</small>
+        <small>Scores shown are cumulative.</small>
       </div>
     </div>
   );

@@ -30,18 +30,12 @@ public class GameEngine {
     }
 
     g.roundNumber++;
-    for (PlayerRuntime p : g.players) p.roundScore = null;
-    g.openingSuccess = null;
-    g.lowestScorePlayerId = null;
-    g.lowestScore = null;
-    g.openingLoserId = null;
     g.deck = Deck.standardShuffled(g.random);
     g.dropPile.clear();
     g.jokerCard = null;
     g.jokerRank = null;
     g.previousTopDropCard = null;
     g.mustDrawAfterDrop = false;
-    g.pendingDropCards.clear();
 
     // Deal exactly four cards to active players only.
     for (PlayerRuntime p : active) {
@@ -64,7 +58,7 @@ public class GameEngine {
     g.dealerIndex = indexOfActive(g, dealer);
     g.turnIndex = g.dealerIndex;
     g.phase = GamePhase.PLAYING;
-    g.beginTurn(g.timerEnabled ? g.turnSeconds : 0);
+    g.beginTurn(g.turnSeconds);
     g.message = "Round " + g.roundNumber + " started — Joker " + g.jokerRank.symbol;
   }
 
@@ -94,16 +88,15 @@ public class GameEngine {
     if (selected.stream().anyMatch(c -> c.rank() != rank))
       throw new IllegalArgumentException("All dropped cards must have the same rank");
 
-    // Keep the current-turn drop in a dedicated temporary area. It is visible to
-    // everyone, but is NOT part of the discard pile until the player chooses a
-    // source (previous drop or draw deck). This keeps the previous discard
-    // clickable and prevents the newly dropped card from becoming drawable.
-    g.pendingDropCards.clear();
+    // Preserve the complete discard history. addFirst means the last selected
+    // card is not silently lost; each physical card remains in the pile.
     for (Card c : selected) {
       p.hand.remove(c);
-      g.pendingDropCards.add(c);
+      g.dropPile.addFirst(c);
     }
 
+    // The player can only take the card that was visible when their turn began.
+    // Newly dropped cards stay above it.
     g.mustDrawAfterDrop = true;
     g.message = p.name + " dropped " + selected.size()
         + " card" + (selected.size() > 1 ? "s" : "");
@@ -118,7 +111,6 @@ public class GameEngine {
 
     ensureDeck(g);
 
-    commitPendingDrop(g);
     Card c = g.deck.draw();
     g.player(pid).hand.add(c);
     afterDraw(g);
@@ -136,10 +128,8 @@ public class GameEngine {
     if (drawable == null || !g.dropPile.contains(drawable))
       throw new IllegalStateException("The previous discard is no longer available");
 
-    // The previous discard is the only discard card drawable by this player.
-    // First commit this turn's temporary drop to the top of the discard pile,
-    // then remove the previous visible card and give it to the player.
-    commitPendingDrop(g);
+    // Do NOT pop the visible top. Remove exactly the card that was visible at
+    // the beginning of this turn. All cards dropped this turn remain on top.
     boolean removed = g.dropPile.removeFirstOccurrence(drawable);
     if (!removed)
       throw new IllegalStateException("Previous discard could not be located");
@@ -147,17 +137,6 @@ public class GameEngine {
     g.player(pid).hand.add(drawable);
     afterDraw(g);
     return drawable;
-  }
-
-
-  private void commitPendingDrop(GameRuntime g) {
-    if (g.pendingDropCards.isEmpty()) return;
-    // Preserve the order of a multi-card same-rank drop while keeping the last
-    // dropped card as the visible top card.
-    for (int i = g.pendingDropCards.size() - 1; i >= 0; i--) {
-      g.dropPile.addFirst(g.pendingDropCards.get(i));
-    }
-    g.pendingDropCards.clear();
   }
 
   private void afterDraw(GameRuntime g) {
@@ -222,32 +201,18 @@ public class GameEngine {
         .orElse(openerScore);
 
     boolean success = openerScore <= lowest;
-    PlayerRuntime lowestPlayer = scores.entrySet().stream()
-        .min(Map.Entry.comparingByValue())
-        .map(Map.Entry::getKey)
-        .orElse(opener);
-    g.openingSuccess = success;
-    g.lowestScorePlayerId = lowestPlayer.id;
-    g.lowestScore = scores.get(lowestPlayer);
-    g.openingLoserId = success ? null : opener.id;
 
     for (var e : scores.entrySet()) {
-      int roundScore = e.getKey() == opener
+      e.getKey().score += e.getKey() == opener
           ? (success ? 0 : 40)
           : (success ? e.getValue() : 0);
-      e.getKey().roundScore = roundScore;
-      e.getKey().score += roundScore;
     }
 
     eliminateAtTarget(g);
     g.phase = GamePhase.ROUND_RESULT;
-    if (success) {
-      g.message = opener.name + " opened successfully — lowest score";
-    } else {
-      int lowestScore = scores.getOrDefault(lowestPlayer, 0);
-      g.message = "Opening failed — " + lowestPlayer.name + " had the lowest score ("
-          + lowestScore + "). " + opener.name + " lost the round (+40).";
-    }
+    g.message = success
+        ? opener.name + " won the round"
+        : "Opening failed — +40 penalty";
 
     g.openingEndsAt = null;
     g.openingOriginalTurnEndsAt = null;
@@ -273,9 +238,10 @@ public class GameEngine {
     }
 
     if (g.mustDrawAfterDrop) {
-      // Reuse the authoritative draw path so the temporary Drop Area is
-      // committed before the automatic draw completes the turn.
-      drawDeck(g, p.id);
+      ensureDeck(g);
+      Card drawn = g.deck.draw();
+      p.hand.add(drawn);
+      afterDraw(g);
     }
     g.message = p.name + " ran out of time — a random move was made";
   }
