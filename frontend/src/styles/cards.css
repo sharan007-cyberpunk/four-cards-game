@@ -892,3 +892,10 @@
   .result-modal h2{font-size:23px}
   .illegal-opening-callout span{font-size:21px}
 }
+
+/* Keep Create/Join controls comfortably sized on small phones. */
+@media (max-width: 600px) {
+  .create-timer-setting input[type=range] {
+    min-height: 24px;
+  }
+}
