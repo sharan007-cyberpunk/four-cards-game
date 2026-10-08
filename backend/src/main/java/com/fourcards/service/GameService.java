@@ -19,10 +19,6 @@ public class GameService {
 
     private final Map<String, GameRuntime> rooms = new ConcurrentHashMap<>();
     private final Set<String> scheduledBots = ConcurrentHashMap.newKeySet();
-    private final Set<String> scheduledTurnTimeouts = ConcurrentHashMap.newKeySet();
-    private final Set<String> scheduledDisconnects = ConcurrentHashMap.newKeySet();
-    private final long turnSeconds;
-    private final long disconnectGraceSeconds;
 
     private final GameEngine engine;
     private final SimpMessagingTemplate messaging;
@@ -33,15 +29,11 @@ public class GameService {
 
     public GameService(
             @Value("${app.opening-seconds:10}") long seconds,
-            @Value("${app.turn-seconds:15}") long turnSeconds,
-            @Value("${app.disconnect-grace-seconds:10}") long disconnectGraceSeconds,
             SimpMessagingTemplate messaging,
             PersistedGameRepository games,
             PersistedRoundRepository rounds
     ) {
-        this.turnSeconds = Math.max(1L, turnSeconds);
-        this.disconnectGraceSeconds = Math.max(1L, disconnectGraceSeconds);
-        this.engine = new GameEngine(seconds, this.turnSeconds);
+        this.engine = new GameEngine(seconds);
         this.messaging = messaging;
         this.games = games;
         this.rounds = rounds;
@@ -77,7 +69,6 @@ public class GameService {
         String code = uniqueCode();
         GameRuntime game = new GameRuntime(code);
         game.targetScore = targetScore;
-        game.turnSeconds = this.turnSeconds;
 
         String playerId = UUID.randomUUID().toString();
         game.players.add(
@@ -167,7 +158,6 @@ public class GameService {
 
         engine.start(game);
         broadcastAll(game);
-        scheduleTurnTimeout(game);
         scheduleBotIfNeeded(game);
     }
 
@@ -195,24 +185,6 @@ public class GameService {
     }
 
     // =========================================================
-    // TURN TIMER SETTINGS
-    // =========================================================
-
-    public void setTurnSeconds(String code, String pid, int seconds) {
-        GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            if (game.phase != GamePhase.LOBBY)
-                throw new IllegalStateException("Timer settings are locked after the game starts");
-            if (!game.player(pid).host)
-                throw new IllegalStateException("Only host can change the turn timer");
-            if (seconds < 5 || seconds > 120)
-                throw new IllegalArgumentException("Turn timer must be between 5 and 120 seconds");
-            game.turnSeconds = seconds;
-            broadcast(game, "Turn timer set to " + seconds + " seconds");
-        }
-    }
-
-    // =========================================================
     // GAME ACTIONS
     // =========================================================
 
@@ -222,40 +194,29 @@ public class GameService {
         }
 
         GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            engine.drop(game, request.playerId(), request.cardCodes());
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
+        engine.drop(game, request.playerId(), request.cardCodes());
+        broadcastAll(game);
         scheduleBotIfNeeded(game);
     }
 
     public void drawDeck(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            engine.drawDeck(game, pid);
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
+        engine.drawDeck(game, pid);
+        broadcastAll(game);
         scheduleBotIfNeeded(game);
     }
 
     public void takeDrop(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            engine.takeDrop(game, pid);
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
+        engine.takeDrop(game, pid);
+        broadcastAll(game);
         scheduleBotIfNeeded(game);
     }
 
     public void open(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            engine.open(game, pid);
-            broadcastAll(game);
-        }
+        engine.open(game, pid);
+        broadcastAll(game);
 
         long delay = Math.max(
                 0L,
@@ -280,16 +241,6 @@ public class GameService {
         );
     }
 
-    public void withdrawOpening(String code, String pid) {
-        GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            engine.withdrawOpening(game, pid);
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
-        scheduleBotIfNeeded(game);
-    }
-
     public void nextRound(String code, String pid) {
         GameRuntime game = requireRoom(code);
 
@@ -301,12 +252,9 @@ public class GameService {
             throw new IllegalStateException("Round is not complete");
         }
 
-        synchronized (game) {
-            engine.nextRound(game);
-            persistRound(game);
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
+        engine.nextRound(game);
+        persistRound(game);
+        broadcastAll(game);
         scheduleBotIfNeeded(game);
     }
 
@@ -423,9 +371,9 @@ public class GameService {
     private void botDraw(GameRuntime game, PlayerRuntime bot) {
         boolean take = false;
 
-        if (game.previousTopDropCard != null && game.dropPile.contains(game.previousTopDropCard)) {
-            Card drawable = game.previousTopDropCard;
-            int drawableValue = drawable.value(game.jokerRank);
+        if (!game.dropPile.isEmpty()) {
+            Card top = game.dropPile.peek();
+            int topValue = top.value(game.jokerRank);
             int bestHandValue = bot.hand.stream()
                     .mapToInt(c -> c.value(game.jokerRank))
                     .max()
@@ -433,8 +381,8 @@ public class GameService {
 
             take = switch (bot.botDifficulty) {
                 case EASY -> game.random.nextBoolean();
-                case NORMAL -> drawableValue <= Math.min(6, bestHandValue);
-                case HARD -> drawableValue == 0 || drawableValue <= bestHandValue;
+                case NORMAL -> topValue <= Math.min(6, bestHandValue);
+                case HARD -> topValue == 0 || topValue <= bestHandValue;
             };
         }
 
@@ -536,60 +484,33 @@ public class GameService {
 
     public void broadcastVoice(
             String code,
-            String authenticatedPlayerId,
             VoiceSignal signal
     ) {
         GameRuntime game = requireRoom(code);
 
-        if (authenticatedPlayerId == null || authenticatedPlayerId.isBlank()) {
-            throw new IllegalArgumentException("Missing player identity");
-        }
-
-        if (signal == null || signal.type() == null || signal.type().isBlank()) {
+        if (signal == null || signal.fromPlayerId() == null) {
             throw new IllegalArgumentException("Invalid voice signal");
         }
 
-        // Never trust fromPlayerId supplied by the browser.
-        PlayerRuntime sender = game.players.stream()
-                .filter(p -> p.id.equals(authenticatedPlayerId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Voice sender is not in this room"
-                ));
-
-        if (signal.toPlayerId() != null) {
-            game.players.stream()
-                    .filter(p -> p.id.equals(signal.toPlayerId()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Voice recipient is not in this room"
-                    ));
+        if (game.players.stream().noneMatch(
+                p -> p.id.equals(signal.fromPlayerId()))) {
+            throw new IllegalArgumentException("Voice sender is not in this room");
         }
 
-        // Only signaling/presence metadata travels through STOMP. No audio
-        // payload is accepted by the server.
-        Set<String> allowed = Set.of(
-                "hello", "offer", "answer", "candidate", "leave", "presence", "mute"
-        );
-        if (!allowed.contains(signal.type())) {
-            throw new IllegalArgumentException("Unsupported voice signal type");
+        if (game.players.stream().noneMatch(p -> p.id.equals(signal.fromPlayerId()) && p.status != PlayerStatus.ELIMINATED)) {
+            throw new IllegalArgumentException("Voice sender is not active in this room");
         }
-
-        VoiceSignal serverSignal = new VoiceSignal(
-                sender.id,
-                signal.toPlayerId(),
-                signal.type(),
-                signal.sdp(),
-                signal.candidate(),
-                signal.sdpMid(),
-                signal.sdpMLineIndex(),
-                signal.micEnabled(),
-                signal.speaking()
-        );
+        if (signal.toPlayerId() != null && game.players.stream().noneMatch(
+                p -> p.id.equals(signal.toPlayerId()) && p.status != PlayerStatus.ELIMINATED)) {
+            throw new IllegalArgumentException("Voice recipient is not active in this room");
+        }
+        if (signal.type() == null || signal.type().isBlank()) {
+            throw new IllegalArgumentException("Voice signal type is required");
+        }
 
         messaging.convertAndSend(
                 "/topic/rooms/" + game.roomCode + "/voice",
-                serverSignal
+                signal
         );
     }
 
@@ -599,140 +520,63 @@ public class GameService {
 
     public void reconnect(String code, String pid) {
         GameRuntime game = requireRoom(code);
-        synchronized (game) {
-            PlayerRuntime p = game.player(pid);
-            if (p.status == PlayerStatus.ELIMINATED) {
-                throw new IllegalStateException("Player is eliminated");
-            }
-            p.status = PlayerStatus.CONNECTED;
-            // If this was the current player's disconnect grace period, keep the
-            // same turn and the original server deadline. Never reset the timer.
-            broadcastAll(game);
-        }
-        scheduleTurnTimeout(game);
-    }
 
-    public void connectWebSocket(String pid, String sessionId) {
-        if (pid == null || sessionId == null) return;
-        for (GameRuntime game : rooms.values()) {
-            PlayerRuntime p = game.players.stream().filter(x -> x.id.equals(pid)).findFirst().orElse(null);
-            if (p != null) {
-                synchronized (game) {
-                    p.websocketSessionId = sessionId;
-                    if (p.status != PlayerStatus.ELIMINATED) p.status = PlayerStatus.CONNECTED;
-                    broadcastAll(game);
-                }
-                scheduleTurnTimeout(game);
-                return;
-            }
+        if (game.phase != GamePhase.LOBBY
+                && game.phase != GamePhase.ROUND_RESULT) {
+            throw new IllegalStateException(
+                    "Reconnect is available between rounds"
+            );
         }
+
+        PlayerRuntime p = game.player(pid);
+        if (p.status == PlayerStatus.ELIMINATED) {
+            throw new IllegalStateException("Player is eliminated");
+        }
+
+        p.status = PlayerStatus.CONNECTED;
+        broadcast(game, p.name + " reconnected");
     }
 
     public void disconnectPlayerFromAll(String pid) {
-        disconnectPlayerFromAll(pid, null);
-    }
-
-    public void disconnectPlayerFromAll(String pid, String sessionId) {
         for (GameRuntime game : rooms.values()) {
-            PlayerRuntime p = game.players.stream().filter(x -> x.id.equals(pid)).findFirst().orElse(null);
-            if (p != null) {
-                if (sessionId != null && p.websocketSessionId != null && !sessionId.equals(p.websocketSessionId)) return;
-                disconnect(game.roomCode, pid, sessionId);
+            if (game.players.stream().anyMatch(p -> p.id.equals(pid))) {
+                disconnect(game.roomCode, pid);
                 return;
             }
         }
     }
 
     public void disconnect(String code, String pid) {
-        disconnect(code, pid, null);
-    }
-
-    public void disconnect(String code, String pid, String sessionId) {
         GameRuntime game = rooms.get(code.toUpperCase(Locale.ROOT));
-        if (game == null) return;
-
-        synchronized (game) {
-            PlayerRuntime p = game.player(pid);
-            if (p.status == PlayerStatus.ELIMINATED) return;
-            if (sessionId != null && p.websocketSessionId != null && !sessionId.equals(p.websocketSessionId)) return;
-
-            if (sessionId == null || Objects.equals(p.websocketSessionId, sessionId)) {
-                p.websocketSessionId = null;
-            }
-            p.status = PlayerStatus.DISCONNECTED;
-
-            if (game.phase == GamePhase.LOBBY) {
-                broadcast(game, p.name + " disconnected");
-                return;
-            }
-
-            if (game.phase == GamePhase.PLAYING && game.currentPlayer() != null
-                    && game.currentPlayer().id.equals(pid)) {
-                scheduleDisconnectTimeout(game, pid);
-                broadcastAll(game);
-                return;
-            }
-
-            broadcastAll(game);
+        if (game == null) {
+            return;
         }
+
+        PlayerRuntime p = game.player(pid);
+
+        if (game.phase == GamePhase.LOBBY) {
+            p.status = PlayerStatus.DISCONNECTED;
+            broadcast(game, p.name + " disconnected");
+            return;
+        }
+
+        if (p.status == PlayerStatus.ELIMINATED) {
+            return;
+        }
+
+        p.status = PlayerStatus.DISCONNECTED;
+
+        if (game.currentPlayer() != null
+                && game.currentPlayer().id.equals(pid)) {
+            game.advanceTurn();
+        }
+
+        if (game.activePlayers().size() <= 1) {
+            game.phase = GamePhase.GAME_OVER;
+        }
+
+        broadcastAll(game);
         scheduleBotIfNeeded(game);
-    }
-
-    private void scheduleDisconnectTimeout(GameRuntime game, String pid) {
-        String key = game.roomCode + ":" + pid;
-        if (!scheduledDisconnects.add(key)) return;
-
-        long delay = Math.max(0L, Duration.between(Instant.now(), Instant.now().plusSeconds(disconnectGraceSeconds)).toMillis());
-        scheduler.schedule(() -> {
-            try {
-                synchronized (game) {
-                    PlayerRuntime p = game.player(pid);
-                    if (p.status != PlayerStatus.DISCONNECTED) return;
-                    if (game.phase == GamePhase.PLAYING && game.currentPlayer() != null
-                            && game.currentPlayer().id.equals(pid)) {
-                        engine.timeoutTurn(game);
-                        game.message = p.name + " timed out — a random move was made";
-                        broadcastAll(game);
-                    }
-                }
-                scheduleTurnTimeout(game);
-                scheduleBotIfNeeded(game);
-            } finally {
-                scheduledDisconnects.remove(key);
-            }
-        }, delay, TimeUnit.MILLISECONDS);
-    }
-
-    private void scheduleTurnTimeout(GameRuntime game) {
-        if (game.phase != GamePhase.PLAYING || game.turnEndsAt == null || game.currentPlayer() == null) return;
-        String pid = game.currentPlayer().id;
-        String key = game.roomCode + ":" + pid + ":" + game.turnEndsAt.toEpochMilli();
-        if (!scheduledTurnTimeouts.add(key)) return;
-
-        long delay = Math.max(0L, Duration.between(Instant.now(), game.turnEndsAt).toMillis());
-        scheduler.schedule(() -> {
-            try {
-                synchronized (game) {
-                    if (game.phase != GamePhase.PLAYING || game.currentPlayer() == null
-                            || !game.currentPlayer().id.equals(pid)
-                            || game.turnEndsAt == null || game.turnEndsAt.toEpochMilli() != Long.parseLong(key.substring(key.lastIndexOf(':') + 1))) {
-                        return;
-                    }
-                    PlayerRuntime current = game.currentPlayer();
-                    if (current.status == PlayerStatus.DISCONNECTED) {
-                        // Disconnect grace owns the resolution path.
-                        scheduleDisconnectTimeout(game, pid);
-                        return;
-                    }
-                    engine.timeoutTurn(game);
-                    broadcastAll(game);
-                }
-                scheduleTurnTimeout(game);
-                scheduleBotIfNeeded(game);
-            } finally {
-                scheduledTurnTimeouts.remove(key);
-            }
-        }, delay, TimeUnit.MILLISECONDS);
     }
 
     // =========================================================
@@ -768,12 +612,15 @@ public class GameService {
             }
         }
 
+        int handScore = g.scorer.score(p.hand, g.jokerRank);
+
         return new PrivateGameState(
                 toPublic(g),
                 pid,
                 p.hand.stream()
                         .map(c -> CardDto.of(c, g.jokerRank))
                         .toList(),
+                handScore,
                 List.of(),
                 legal
         );
@@ -819,13 +666,7 @@ public class GameService {
 
         PlayerRuntime cur = g.currentPlayer();
 
-        String top = g.dropPile.isEmpty()
-                ? null
-                : g.dropPile.peekFirst().code();
-
-        CardDto joker = g.jokerCard == null || g.jokerRank == null
-                ? null
-                : CardDto.of(g.jokerCard.physicalCard(), g.jokerRank);
+        String top = g.dropPile.isEmpty() ? null : g.dropPile.peek().code();
 
         return new PublicGameState(
                 g.roomCode,
@@ -833,18 +674,17 @@ public class GameService {
                 players,
                 cur == null ? null : cur.id,
                 top,
+                g.previousDropCard == null ? null : g.previousDropCard.code(),
+                g.jokerCard == null ? null : g.jokerCard.code(),
                 g.jokerRank == null ? null : g.jokerRank.symbol,
-                joker,
                 g.deck == null ? 0 : g.deck.size(),
                 g.targetScore,
                 g.roundNumber,
                 g.message,
-                g.turnEndsAt == null ? null : g.turnEndsAt.toEpochMilli(),
-                g.openingEndsAt == null
-                        ? null
-                        : g.openingEndsAt.toEpochMilli(),
-                g.openingPlayerId,
-                (int) g.turnSeconds
+                g.openingEndsAt == null ? null : g.openingEndsAt.toEpochMilli(),
+                g.roundWinnerId,
+                g.roundWinnerName,
+                g.roundWinnerHandScore
         );
     }
 

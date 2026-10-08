@@ -4,19 +4,20 @@ import com.fourcards.model.GamePhase;
 import java.util.List;
 
 public record PublicGameState(
-    String roomCode,
-    GamePhase phase,
-    List<PlayerPublicDto> players,
-    String currentPlayerId,
-    String topDropCard,
-    String jokerRank,
-    CardDto jokerCard,
-    int deckCount,
-    int targetScore,
-    int roundNumber,
-    String message,
-    Long turnEndsAt,
-    Long openingEndsAt,
-    String openingPlayerId,
-    int turnSeconds
+        String roomCode,
+        GamePhase phase,
+        List<PlayerPublicDto> players,
+        String currentPlayerId,
+        String topDropCard,
+        String previousDropCard,
+        String jokerCard,
+        String jokerRank,
+        int deckCount,
+        int targetScore,
+        int roundNumber,
+        String message,
+        Long openingEndsAt,
+        String roundWinnerId,
+        String roundWinnerName,
+        Integer roundWinnerHandScore
 ) {}
