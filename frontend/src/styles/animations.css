@@ -1,1 +1,10 @@
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(121,201,155,.35)}50%{box-shadow:0 0 0 7px rgba(121,201,155,0)}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+
+@keyframes creatorMarquee{from{transform:translateX(0)}to{transform:translateX(-25%)}}
+.creator-marquee{position:relative;margin-top:24px;width:min(470px,100%);overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:9px 0;mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.creator-marquee__track{display:flex;width:max-content;align-items:center;gap:18px;white-space:nowrap;animation:creatorMarquee 12s linear infinite;will-change:transform}
+.creator-marquee__track span{font:700 9px Manrope,sans-serif;letter-spacing:.24em;color:var(--muted)}
+.creator-marquee__track i{font-style:normal;color:var(--primary);font-size:9px}
+.creator-marquee:hover .creator-marquee__track{animation-play-state:paused}
+@media (prefers-reduced-motion:reduce){.creator-marquee__track{animation:none}.creator-marquee__track span:nth-of-type(n+2),.creator-marquee__track i:nth-of-type(n+2){display:none}}

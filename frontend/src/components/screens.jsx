@@ -52,6 +52,15 @@ function Landing({ onCreate, onJoin }) {
             <Wifi size={15} /> Real-time
           </span>
         </div>
+
+        <div className="creator-marquee" aria-label="Created by Sharan">
+          <div className="creator-marquee__track">
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+          </div>
+        </div>
       </div>
 
       <div className="hero-table">
@@ -63,7 +72,7 @@ function Landing({ onCreate, onJoin }) {
         </div>
 
         <div className="hero-card card red tilt-b">
-          <span>8</span>
+          <span>J</span>
           <span>♦</span>
         </div>
 
@@ -263,7 +272,7 @@ function Join({ onBack, onJoin }) {
   );
 }
 
-function Lobby({ room, state, onBack, onStart, onTarget }) {
+function Lobby({ room, state, onBack, onStart, onTarget, onTimer, onHandScores }) {
   const me = state?.players?.find(p => p.id === room.playerId);
   const host = me?.host;
 
@@ -393,6 +402,54 @@ function Lobby({ room, state, onBack, onStart, onTarget }) {
             disabled={!host}
             onChange={e => onTarget(Number(e.target.value))}
           />
+
+          <div className="timer-setting">
+            <div className="timer-setting-head">
+              <div>
+                <span className="panel-kicker">TURN TIMER</span>
+                <b>{state?.turnSeconds ? `${state.turnSeconds}s` : 'OFF'}</b>
+              </div>
+              <span>HOST ONLY</span>
+            </div>
+            <div className="timer-options">
+              {[0, 10, 15, 20, 30, 45, 60, 90, 120].map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  className={(state?.turnSeconds ?? 15) === v ? 'selected' : ''}
+                  disabled={!host}
+                  onClick={() => onTimer(v)}
+                >
+                  {v === 0 ? 'OFF' : `${v}s`}
+                </button>
+              ))}
+            </div>
+            <small>Turn timer can be disabled. When enabled, the server controls the deadline.</small>
+          </div>
+
+          <div className="timer-setting hand-score-setting">
+            <div className="timer-setting-head">
+              <div>
+                <span className="panel-kicker">HAND SCORES</span>
+                <b>{state?.showHandScores ? 'VISIBLE' : 'HIDDEN'}</b>
+              </div>
+              <span>HOST ONLY</span>
+            </div>
+            <div className="timer-options two">
+              {[true, false].map(v => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  className={Boolean(state?.showHandScores) === v ? 'selected' : ''}
+                  disabled={!host}
+                  onClick={() => onHandScores(v)}
+                >
+                  {v ? 'Show scores' : 'Hide scores'}
+                </button>
+              ))}
+            </div>
+            <small>When enabled, players see the numeric value on cards in their own hand.</small>
+          </div>
 
           <p className="setting-help">
             First active player to reach the target is eliminated.
