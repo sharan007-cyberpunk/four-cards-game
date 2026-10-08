@@ -77,6 +77,7 @@ public class GameService {
         String code = uniqueCode();
         GameRuntime game = new GameRuntime(code);
         game.targetScore = targetScore;
+        game.turnSeconds = this.turnSeconds;
 
         String playerId = UUID.randomUUID().toString();
         game.players.add(
@@ -194,6 +195,24 @@ public class GameService {
     }
 
     // =========================================================
+    // TURN TIMER SETTINGS
+    // =========================================================
+
+    public void setTurnSeconds(String code, String pid, int seconds) {
+        GameRuntime game = requireRoom(code);
+        synchronized (game) {
+            if (game.phase != GamePhase.LOBBY)
+                throw new IllegalStateException("Timer settings are locked after the game starts");
+            if (!game.player(pid).host)
+                throw new IllegalStateException("Only host can change the turn timer");
+            if (seconds < 5 || seconds > 120)
+                throw new IllegalArgumentException("Turn timer must be between 5 and 120 seconds");
+            game.turnSeconds = seconds;
+            broadcast(game, "Turn timer set to " + seconds + " seconds");
+        }
+    }
+
+    // =========================================================
     // GAME ACTIONS
     // =========================================================
 
@@ -259,6 +278,16 @@ public class GameService {
                 delay,
                 TimeUnit.MILLISECONDS
         );
+    }
+
+    public void withdrawOpening(String code, String pid) {
+        GameRuntime game = requireRoom(code);
+        synchronized (game) {
+            engine.withdrawOpening(game, pid);
+            broadcastAll(game);
+        }
+        scheduleTurnTimeout(game);
+        scheduleBotIfNeeded(game);
     }
 
     public void nextRound(String code, String pid) {
@@ -661,8 +690,8 @@ public class GameService {
                     if (p.status != PlayerStatus.DISCONNECTED) return;
                     if (game.phase == GamePhase.PLAYING && game.currentPlayer() != null
                             && game.currentPlayer().id.equals(pid)) {
-                        game.advanceTurn(turnSeconds);
-                        game.message = p.name + " timed out and the turn was skipped";
+                        engine.timeoutTurn(game);
+                        game.message = p.name + " timed out — a random move was made";
                         broadcastAll(game);
                     }
                 }
@@ -695,8 +724,7 @@ public class GameService {
                         scheduleDisconnectTimeout(game, pid);
                         return;
                     }
-                    game.message = current.name + " ran out of time — turn skipped";
-                    game.advanceTurn(turnSeconds);
+                    engine.timeoutTurn(game);
                     broadcastAll(game);
                 }
                 scheduleTurnTimeout(game);
@@ -814,7 +842,9 @@ public class GameService {
                 g.turnEndsAt == null ? null : g.turnEndsAt.toEpochMilli(),
                 g.openingEndsAt == null
                         ? null
-                        : g.openingEndsAt.toEpochMilli()
+                        : g.openingEndsAt.toEpochMilli(),
+                g.openingPlayerId,
+                (int) g.turnSeconds
         );
     }
 

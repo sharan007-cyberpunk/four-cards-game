@@ -58,7 +58,7 @@ public class GameEngine {
     g.dealerIndex = indexOfActive(g, dealer);
     g.turnIndex = g.dealerIndex;
     g.phase = GamePhase.PLAYING;
-    g.beginTurn(turnSeconds);
+    g.beginTurn(g.turnSeconds);
     g.message = "Round " + g.roundNumber + " started — Joker " + g.jokerRank.symbol;
   }
 
@@ -141,7 +141,7 @@ public class GameEngine {
 
   private void afterDraw(GameRuntime g) {
     g.mustDrawAfterDrop = false;
-    g.advanceTurn(turnSeconds);
+    g.advanceTurn(g.turnSeconds);
     g.message = "Turn complete";
   }
 
@@ -156,10 +156,25 @@ public class GameEngine {
       throw new IllegalStateException("Opening is already in progress");
 
     g.phase = GamePhase.OPEN_CONFIRMATION;
-    g.turnEndsAt = null;
     g.openingPlayerId = pid;
+    g.openingOriginalTurnEndsAt = g.turnEndsAt;
+    g.turnEndsAt = null;
     g.openingEndsAt = Instant.now().plusSeconds(openingSeconds);
     g.message = g.player(pid).name + " opened";
+  }
+
+  public synchronized void withdrawOpening(GameRuntime g, String pid) {
+    if (g.phase != GamePhase.OPEN_CONFIRMATION)
+      throw new IllegalStateException("No opening is in progress");
+    if (!Objects.equals(g.openingPlayerId, pid))
+      throw new IllegalStateException("Only the opening player can withdraw");
+
+    g.phase = GamePhase.PLAYING;
+    g.openingPlayerId = null;
+    g.openingEndsAt = null;
+    g.turnEndsAt = g.openingOriginalTurnEndsAt;
+    g.openingOriginalTurnEndsAt = null;
+    g.message = g.player(pid).name + " withdrew the opening and continues the turn";
   }
 
   public synchronized void evaluateOpening(GameRuntime g) {
@@ -200,10 +215,35 @@ public class GameEngine {
         : "Opening failed — +40 penalty";
 
     g.openingEndsAt = null;
+    g.openingOriginalTurnEndsAt = null;
     g.openingPlayerId = null;
 
     if (g.activePlayers().size() <= 1)
       g.phase = GamePhase.GAME_OVER;
+  }
+
+  /** Resolve a turn that expired before the player completed it. */
+  public synchronized void timeoutTurn(GameRuntime g) {
+    requireTurn(g, g.turnPlayerId);
+    ensurePlaying(g);
+    PlayerRuntime p = g.currentPlayer();
+    if (p == null) return;
+
+    if (!g.mustDrawAfterDrop) {
+      // A turn always starts with DROP. If the player did nothing, the server
+      // chooses one random card and performs a legal drop, then immediately
+      // completes the required draw so the table cannot stall.
+      Card random = p.hand.get(g.random.nextInt(p.hand.size()));
+      drop(g, p.id, List.of(random.code()));
+    }
+
+    if (g.mustDrawAfterDrop) {
+      ensureDeck(g);
+      Card drawn = g.deck.draw();
+      p.hand.add(drawn);
+      afterDraw(g);
+    }
+    g.message = p.name + " ran out of time — a random move was made";
   }
 
   public synchronized void nextRound(GameRuntime g) {

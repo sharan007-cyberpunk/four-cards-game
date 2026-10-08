@@ -52,6 +52,15 @@ function Landing({ onCreate, onJoin }) {
             <Wifi size={15} /> Real-time
           </span>
         </div>
+
+        <div className="creator-marquee" aria-label="Created by Sharan">
+          <div className="creator-marquee__track">
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+          </div>
+        </div>
       </div>
 
       <div className="hero-table">
@@ -63,7 +72,7 @@ function Landing({ onCreate, onJoin }) {
         </div>
 
         <div className="hero-card card red tilt-b">
-          <span>8</span>
+          <span>J</span>
           <span>♦</span>
         </div>
 
@@ -263,7 +272,7 @@ function Join({ onBack, onJoin }) {
   );
 }
 
-function Lobby({ room, state, onBack, onStart, onTarget }) {
+function Lobby({ room, state, onBack, onStart, onTarget, onTimer }) {
   const me = state?.players?.find(p => p.id === room.playerId);
   const host = me?.host;
 
@@ -393,6 +402,26 @@ function Lobby({ room, state, onBack, onStart, onTarget }) {
             disabled={!host}
             onChange={e => onTarget(Number(e.target.value))}
           />
+
+          <div className="timer-setting">
+            <div className="timer-setting-head">
+              <div>
+                <span className="panel-kicker">TURN TIMER</span>
+                <b>{state?.turnSeconds ?? 15}s</b>
+              </div>
+              <span>HOST ONLY</span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="120"
+              step="5"
+              value={state?.turnSeconds ?? 15}
+              disabled={!host}
+              onChange={e => onTimer(Number(e.target.value))}
+            />
+            <small>Time allowed for each player to complete their turn. The server controls the deadline.</small>
+          </div>
 
           <p className="setting-help">
             First active player to reach the target is eliminated.

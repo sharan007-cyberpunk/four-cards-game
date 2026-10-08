@@ -762,3 +762,20 @@
     border-radius: 6px;
   }
 }
+
+/* Final gameplay additions */
+.current-drop-area{min-width:128px}
+.drop-target{width:104px;height:120px;border-radius:11px;border:1px dashed rgba(214,184,106,.25);background:rgba(214,184,106,.035);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--faint);transition:.2s var(--ease)}
+.current-drop-area.ready .drop-target{border-color:rgba(214,184,106,.65);background:rgba(214,184,106,.07);box-shadow:0 0 0 1px rgba(214,184,106,.08),0 0 28px rgba(214,184,106,.08)}
+.drop-target span{font-size:8px;letter-spacing:.18em;color:var(--primary)}
+.drop-target strong{font:700 11px Manrope;color:var(--text)}
+.drop-hint{font-size:8px;color:var(--muted);letter-spacing:.08em}
+.deal-in{animation:cardDealIn .52s cubic-bezier(.2,.8,.2,1) both}
+@keyframes cardDealIn{0%{opacity:0;transform:translateY(-110px) scale(.72) rotate(-8deg);filter:blur(2px)}65%{opacity:1;transform:translateY(8px) scale(1.03) rotate(1deg)}100%{opacity:1;transform:translateY(0) scale(1) rotate(0)}}
+.timer-setting{border:1px solid var(--border);background:var(--surface-2);border-radius:12px;padding:14px;margin:16px 0 18px}
+.timer-setting-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.timer-setting-head div{display:flex;align-items:baseline;gap:9px}.timer-setting-head b{font:800 20px Manrope;color:var(--primary)}.timer-setting-head>span{font-size:7px;letter-spacing:.15em;color:var(--faint);border:1px solid var(--border);border-radius:999px;padding:5px 7px}
+.timer-setting input[type=range]{margin:2px 0 8px}.timer-setting small{display:block;color:var(--muted);font-size:9px;line-height:1.5}
+.withdraw-open{min-height:38px;padding:0 11px;font-size:9px;white-space:nowrap}
+.open-lock .countdown{min-width:34px;text-align:center}
+@media(max-width:900px){.piles{gap:16px}.drop-target,.playing.small,.empty-pile,.deck-back{width:72px;height:104px}.current-drop-area{min-width:80px}.pile-label{font-size:7px}.joker-zone{transform:scale(.9)}.withdraw-open{font-size:8px;padding:0 8px}}

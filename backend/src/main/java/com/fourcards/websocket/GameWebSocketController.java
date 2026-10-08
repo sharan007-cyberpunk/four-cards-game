@@ -41,6 +41,11 @@ public class GameWebSocketController {
         service.open(code, principalId(accessor));
     }
 
+    @MessageMapping("/room/{code}/withdraw-open")
+    public void withdrawOpen(@DestinationVariable String code, StartGameRequest request, StompHeaderAccessor accessor) {
+        service.withdrawOpening(code, principalId(accessor));
+    }
+
     @MessageMapping("/room/{code}/next")
     public void next(@DestinationVariable String code, StartGameRequest request, StompHeaderAccessor accessor) {
         service.nextRound(code, principalId(accessor));

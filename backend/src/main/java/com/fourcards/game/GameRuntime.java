@@ -19,6 +19,10 @@ public class GameRuntime {
   public String turnPlayerId;
   /** Server-authoritative deadline for the current turn. */
   public Instant turnEndsAt;
+  /** Host-configured turn duration for this room. */
+  public long turnSeconds = 15;
+  /** Original turn deadline retained while an opening is being confirmed. */
+  public Instant openingOriginalTurnEndsAt;
 
   public Deck deck;
   /** Newest discard is always first. The complete history is retained for the round. */

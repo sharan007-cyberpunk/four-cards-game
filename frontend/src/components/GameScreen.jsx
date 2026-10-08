@@ -10,6 +10,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
   const [selected, setSelected] = useState([]);
   const [handOrder, setHandOrder] = useState([]);
   const [dragCode, setDragCode] = useState(null);
+  const [dealing, setDealing] = useState(false);
 
   const me = state?.players?.find(p => p.id === room.playerId);
   const myTurn = state?.currentPlayerId === room.playerId;
@@ -39,12 +40,14 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
   useEffect(() => {
     setSelected([]);
     setHandOrder(hand.map(c => c.code));
-  }, [
-    state?.message,
-    state?.currentPlayerId,
-    state?.phase,
-    privateState?.hand?.length
-  ]);
+  }, [state?.message, state?.currentPlayerId, state?.phase, privateState?.hand?.length]);
+
+  useEffect(() => {
+    if (state?.phase !== 'PLAYING' || !state?.roundNumber || !hand.length) return;
+    setDealing(true);
+    const t = setTimeout(() => setDealing(false), Math.max(900, hand.length * 220 + 250));
+    return () => clearTimeout(t);
+  }, [state?.roundNumber, hand.length]);
 
   const action = (dest, body = {}) => {
     socket.send(`/room/${room.roomCode}/${dest}`, {
@@ -116,7 +119,8 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
           {open ? (
             <>
               <Clock3 size={16}/>
-              OPENING CHECK
+              {state.players.find(p => p.id === state.openingPlayerId)?.name || 'Player'} IS OPENING
+              {state.openingEndsAt && <Countdown endsAt={state.openingEndsAt}/>}
             </>
           ) : myTurn ? (
             <>
@@ -163,8 +167,17 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
           <div className="table-light"/>
 
           <div className="piles">
+            <div className="pile-wrap previous-drop-wrap">
+              <span className="pile-label">PREVIOUS DROP <b>VISIBLE</b></span>
+              {state.topDropCard ? (
+                <PlayingCard code={state.topDropCard} small nonInteractive/>
+              ) : (
+                <div className="empty-pile">PREVIOUS DROP</div>
+              )}
+            </div>
+
             <div
-              className={`pile-wrap drop-zone ${myTurn && legal.includes('DROP') ? 'ready' : ''}`}
+              className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''}`}
               onDragOver={e => {
                 if (myTurn && legal.includes('DROP')) {
                   e.preventDefault();
@@ -173,57 +186,27 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               }}
               onDrop={e => {
                 e.preventDefault();
-                dropDraggedCard();
+                const code = e.dataTransfer.getData('text/plain') || dragCode;
+                if (code) drop([code]);
               }}
             >
-              <span className="pile-label">
-                DROP PILE
-                <b>{state.topDropCard ? 'LIVE' : 'EMPTY'}</b>
-              </span>
-
-              {state.topDropCard ? (
-                <PlayingCard
-                  code={state.topDropCard}
-                  small
-                  nonInteractive
-                />
-              ) : (
-                <div className="empty-pile">DROP PILE</div>
-              )}
-
-              {myTurn && legal.includes('DROP') && (
-                <small className="drop-hint">
-                  Drag a card here
-                </small>
-              )}
+              <span className="pile-label">DROP AREA <b>CURRENT TURN</b></span>
+              <div className="drop-target">
+                <span>DROP</span>
+                <strong>YOUR CARD</strong>
+              </div>
+              {myTurn && legal.includes('DROP') && <small className="drop-hint">Drag a card here</small>}
             </div>
 
             <div className="pile-wrap deck-wrap">
-              <span className="pile-label">
-                DRAW DECK <b>{state.deckCount}</b>
-              </span>
-              <div className="deck-back" aria-label="Draw deck">
-                <div/>
-                <div/>
-              </div>
+              <span className="pile-label">DRAW DECK <b>{state.deckCount}</b></span>
+              <div className="deck-back" aria-label="Draw deck"><div/><div/></div>
             </div>
 
-            {/* Immutable Joker: visually positioned immediately to the right of the draw deck. */}
             <div className="joker-zone" aria-label="Immutable Joker card">
-              <div className="joker-zone-label">
-                <LockKeyhole size={10}/>
-                JOKER
-              </div>
-
-              {joker ? (
-                <JokerCard card={joker}/>
-              ) : (
-                <div className="joker-empty">JOKER</div>
-              )}
-
-              <span className="joker-rule">
-                {state.jokerRank || '—'} = 0
-              </span>
+              <div className="joker-zone-label"><LockKeyhole size={10}/>JOKER</div>
+              {joker ? <JokerCard card={joker}/> : <div className="joker-empty">JOKER</div>}
+              <span className="joker-rule">{state.jokerRank || '—'} = 0</span>
             </div>
           </div>
 
@@ -261,6 +244,8 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               <PlayingCard
                 key={card.code}
                 code={card.code}
+                className={dealing ? 'deal-in' : ''}
+                style={dealing ? {animationDelay: `${index * 180}ms`} : undefined}
                 value={card.value}
                 selected={selected.includes(card.code)}
                 onClick={() => toggle(card)}
@@ -300,9 +285,12 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               <div className="open-lock">
                 <Clock3 size={18}/>
                 <div>
-                  <b>Opening check in progress</b>
-                  <span>Cards can be rearranged. Gameplay is paused.</span>
+                  <b>{state.players.find(p => p.id === state.openingPlayerId)?.name || 'Player'} is opening</b>
+                  <span>They can withdraw before the 10-second check ends and continue the turn.</span>
                 </div>
+                {state.openingPlayerId === room.playerId && (
+                  <button className="btn secondary withdraw-open" onClick={() => action('withdraw-open')}>Withdraw opening</button>
+                )}
                 <Countdown endsAt={state.openingEndsAt}/>
               </div>
             ) : (
@@ -483,7 +471,9 @@ function PlayingCard({
   onDragEnd,
   onDragOver,
   onDrop,
-  nonInteractive
+  nonInteractive,
+  className: extraClass = '',
+  style: extraStyle
 }) {
   const suit = code?.slice(-1);
   const rank = code?.slice(0, -1);
@@ -491,11 +481,11 @@ function PlayingCard({
 
   const className = `card playing ${red ? 'red' : 'black'} ${
     selected ? 'selected' : ''
-  } ${small ? 'small' : ''} ${nonInteractive ? 'non-interactive' : ''}`;
+  } ${small ? 'small' : ''} ${nonInteractive ? 'non-interactive' : ''} ${extraClass}`;
 
   if (nonInteractive) {
     return (
-      <div className={className} style={{'--i': index}}>
+      <div className={className} style={{'--i': index, ...extraStyle}}>
         <span>{rank}</span>
         <strong>{suit}</strong>
         {!small && <em>{value ?? ''}</em>}
@@ -507,7 +497,7 @@ function PlayingCard({
     <button
       aria-label={`${rank} ${suit}`}
       className={className}
-      style={{'--i': index}}
+      style={{'--i': index, ...extraStyle}}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
