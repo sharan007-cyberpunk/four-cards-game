@@ -52,6 +52,15 @@ function Landing({ onCreate, onJoin }) {
             <Wifi size={15} /> Real-time
           </span>
         </div>
+
+        <div className="creator-marquee" aria-label="Created by Sharan">
+          <div className="creator-marquee__track">
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+            <span>CREATED BY SHARAN</span><i>✦</i>
+          </div>
+        </div>
       </div>
 
       <div className="hero-table">
@@ -63,7 +72,7 @@ function Landing({ onCreate, onJoin }) {
         </div>
 
         <div className="hero-card card red tilt-b">
-          <span>8</span>
+          <span>J</span>
           <span>♦</span>
         </div>
 
@@ -86,6 +95,7 @@ function Create({ onBack, onCreate }) {
   const [target, setTarget] = useState(50);
   const [bots, setBots] = useState(0);
   const [difficulty, setDifficulty] = useState('NORMAL');
+  const [turnSeconds, setTurnSeconds] = useState(15);
 
   return (
     <FormShell
@@ -186,6 +196,38 @@ function Create({ onBack, onCreate }) {
           )}
         </div>
 
+        <div className="timer-setting create-timer-setting">
+          <div className="timer-setting-head">
+            <div>
+              <span className="panel-kicker">TURN TIMER</span>
+              <b>{turnSeconds === 0 ? 'OFF' : `${turnSeconds}s`}</b>
+            </div>
+            <span>HOST SETTING</span>
+          </div>
+          <div className="timer-presets">
+            {[0, 10, 15, 30, 45, 60, 90].map(v => (
+              <button
+                key={v}
+                type="button"
+                className={turnSeconds === v ? 'selected' : ''}
+                onClick={() => setTurnSeconds(v)}
+              >
+                {v === 0 ? 'OFF' : `${v}s`}
+              </button>
+            ))}
+          </div>
+          <input
+            type="range"
+            min="5"
+            max="120"
+            step="5"
+            value={Math.max(5, turnSeconds || 5)}
+            disabled={turnSeconds === 0}
+            onChange={e => setTurnSeconds(Number(e.target.value))}
+          />
+          <small>Choose OFF for unlimited turns, or set the maximum time each player has to complete a turn.</small>
+        </div>
+
         <div className="setting-note">
           <Sparkles size={16} />
 
@@ -201,7 +243,7 @@ function Create({ onBack, onCreate }) {
         <button
           className="btn primary wide"
           disabled={name.trim().length < 2}
-          onClick={() => onCreate(name, target, bots, difficulty)}
+          onClick={() => onCreate(name, target, bots, difficulty, turnSeconds)}
         >
           Create game <span>→</span>
         </button>
