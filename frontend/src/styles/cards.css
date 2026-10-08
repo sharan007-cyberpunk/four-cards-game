@@ -779,13 +779,3 @@
 .withdraw-open{min-height:38px;padding:0 11px;font-size:9px;white-space:nowrap}
 .open-lock .countdown{min-width:34px;text-align:center}
 @media(max-width:900px){.piles{gap:16px}.drop-target,.playing.small,.empty-pile,.deck-back{width:72px;height:104px}.current-drop-area{min-width:80px}.pile-label{font-size:7px}.joker-zone{transform:scale(.9)}.withdraw-open{font-size:8px;padding:0 8px}}
-
-
-/* Round winner + final winner celebration */
-.round-winner-callout{display:grid;gap:5px;margin:8px 0 20px;padding:16px;border:1px solid rgba(214,184,106,.28);border-radius:16px;background:rgba(214,184,106,.07)}
-.round-winner-callout strong{font:800 24px Manrope;color:var(--text)}
-.round-winner-callout span{font-size:11px;color:var(--muted)}
-.round-winner-callout>b{font:800 34px Manrope;color:var(--primary);margin-top:4px}.round-winner-callout b small{font:700 8px DM Sans;color:var(--faint);letter-spacing:.12em}
-.winner-announcement{margin:0 auto 16px;padding:11px 14px;border-radius:12px;border:1px solid rgba(214,184,106,.22);background:rgba(214,184,106,.06);color:var(--muted);font-size:12px}.winner-announcement strong{color:var(--text)}
-.party-popper{display:block;width:92px;height:92px;object-fit:contain;margin:-8px auto 4px}
-@media(max-width:600px){.round-winner-callout strong{font-size:20px}.party-popper{width:76px;height:76px}.winner-announcement{font-size:11px}}

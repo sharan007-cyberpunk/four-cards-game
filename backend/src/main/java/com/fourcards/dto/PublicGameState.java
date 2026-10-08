@@ -18,9 +18,5 @@ public record PublicGameState(
     Long turnEndsAt,
     Long openingEndsAt,
     String openingPlayerId,
-    int turnSeconds,
-    String roundWinnerName,
-    Integer roundWinnerHandScore,
-    String finalWinnerName,
-    Integer finalWinnerScore
+    int turnSeconds
 ) {}

@@ -36,13 +36,6 @@ public class GameRuntime {
   public Card previousTopDropCard;
 
   public String message = "";
-
-  /** Public round-result metadata. Populated only after opening evaluation. */
-  public String roundWinnerName;
-  public Integer roundWinnerHandScore;
-  /** Public final-winner metadata once only one active player remains. */
-  public String finalWinnerName;
-  public Integer finalWinnerScore;
   public Instant openingEndsAt;
   public String openingPlayerId;
   public boolean mustDrawAfterDrop;
