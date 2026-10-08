@@ -22,6 +22,8 @@ public record PublicGameState(
     int turnSeconds,
     String roundWinnerName,
     Integer roundWinnerHandScore,
+    String illegalOpeningWinnerName,
+    Integer illegalOpeningLowestScore,
     String finalWinnerName,
     Integer finalWinnerScore
 ) {}

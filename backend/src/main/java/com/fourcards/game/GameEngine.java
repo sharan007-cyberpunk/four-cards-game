@@ -35,7 +35,13 @@ public class GameEngine {
     g.jokerCard = null;
     g.jokerRank = null;
     g.previousTopDropCard = null;
+    g.currentTurnDropCard = null;
     g.mustDrawAfterDrop = false;
+    g.lastRoundScores.clear();
+    g.roundWinnerName = null;
+    g.roundWinnerHandScore = null;
+    g.illegalOpeningWinnerName = null;
+    g.illegalOpeningLowestScore = null;
 
     // Deal exactly four cards to active players only.
     for (PlayerRuntime p : active) {
@@ -209,17 +215,29 @@ public class GameEngine {
     g.roundWinnerName = success ? opener.name : null;
     g.roundWinnerHandScore = success ? openerScore : null;
 
+    if (!success) {
+      PlayerRuntime lowestPlayer = scores.entrySet().stream()
+          .min(Map.Entry.comparingByValue())
+          .map(Map.Entry::getKey)
+          .orElse(null);
+      g.illegalOpeningWinnerName = lowestPlayer == null ? null : lowestPlayer.name;
+      g.illegalOpeningLowestScore = lowestPlayer == null ? null : scores.get(lowestPlayer);
+    }
+
+    g.lastRoundScores.clear();
     for (var e : scores.entrySet()) {
-      e.getKey().score += e.getKey() == opener
+      int roundScore = e.getKey() == opener
           ? (success ? 0 : 40)
           : (success ? e.getValue() : 0);
+      g.lastRoundScores.put(e.getKey().id, roundScore);
+      e.getKey().score += roundScore;
     }
 
     eliminateAtTarget(g);
     g.phase = GamePhase.ROUND_RESULT;
     g.message = success
         ? opener.name + " won the round"
-        : "Opening failed — +40 penalty";
+        : "Opening failed — " + g.illegalOpeningWinnerName + " had the lowest score";
 
     g.openingEndsAt = null;
     g.openingOriginalTurnEndsAt = null;

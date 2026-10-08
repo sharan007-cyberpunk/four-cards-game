@@ -782,6 +782,7 @@ public class GameService {
                 p.hand.stream()
                         .map(c -> CardDto.of(c, g.jokerRank))
                         .toList(),
+                g.scorer.score(p.hand, g.jokerRank),
                 List.of(),
                 legal
         );
@@ -818,6 +819,8 @@ public class GameService {
                                 p.id,
                                 p.name,
                                 p.score,
+                                g.lastRoundScores.get(p.id),
+                                p.hand.size(),
                                 p.status,
                                 p.host,
                                 p.dealer,
@@ -861,6 +864,8 @@ public class GameService {
                 (int) g.turnSeconds,
                 g.roundWinnerName,
                 g.roundWinnerHandScore,
+                g.illegalOpeningWinnerName,
+                g.illegalOpeningLowestScore,
                 g.finalWinnerName,
                 g.finalWinnerScore
         );

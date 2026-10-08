@@ -42,6 +42,11 @@ public class GameRuntime {
   /** Public round-result metadata. Populated only after opening evaluation. */
   public String roundWinnerName;
   public Integer roundWinnerHandScore;
+  /** Public explanation for an illegal opening: who actually had the lowest hand. */
+  public String illegalOpeningWinnerName;
+  public Integer illegalOpeningLowestScore;
+  /** Points awarded to each player in the most recently completed round. */
+  public final Map<String, Integer> lastRoundScores = new LinkedHashMap<>();
   /** Public final-winner metadata once only one active player remains. */
   public String finalWinnerName;
   public Integer finalWinnerScore;

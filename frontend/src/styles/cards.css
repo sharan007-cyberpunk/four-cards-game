@@ -808,3 +808,87 @@
 .timer-presets button.selected{border-color:rgba(214,184,106,.45);background:rgba(214,184,106,.09);color:var(--primary)}
 @media(max-width:900px){.piles{gap:12px}.click-hint{font-size:6px}.timer-presets{gap:5px}.timer-presets button{padding:0 8px}}
 @media(max-width:600px){.piles{gap:8px;transform:scale(.82)}.deal-banner{font-size:7px}.timer-presets button{height:28px;padding:0 7px}}
+
+.results-list.round-scores .results-header{display:grid;grid-template-columns:1fr 72px 90px;gap:8px;padding:6px 3px 8px;color:var(--faint);font-size:8px;letter-spacing:.12em;border-bottom:1px solid var(--border)}
+.results-list.round-scores>div:not(.results-header){display:grid;grid-template-columns:1fr 72px 90px;gap:8px;align-items:center;padding:10px 3px;color:var(--muted);font-size:12px}
+.results-list.round-scores>div:not(.results-header) span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.results-list.round-scores>div:not(.results-header) b{color:var(--primary);font-family:Manrope;text-align:right}
+.results-list.round-scores>div:not(.results-header) strong{color:var(--text);font-family:Manrope;text-align:right}
+@media(max-width:520px){.results-list.round-scores .results-header,.results-list.round-scores>div:not(.results-header){grid-template-columns:1fr 58px 78px;gap:5px}.result-modal{padding:22px 16px}}
+
+/* Private hand score + visible unrevealed opponent cards */
+.score-summary{display:flex!important;align-items:flex-end;gap:12px;min-width:0}
+.score-summary>.score-line{display:flex;align-items:flex-end;gap:5px;min-width:0}
+.hand-score-private{display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid rgba(127,184,160,.18);background:rgba(127,184,160,.05);border-radius:9px;white-space:nowrap}
+.hand-score-private span{font-size:7px;letter-spacing:.12em;color:var(--faint)}
+.hand-score-private b{font:800 15px Manrope;color:var(--accent)}
+.hand-score-private em{font-style:normal;font-size:6px;letter-spacing:.1em;color:var(--success);border:1px solid rgba(121,201,155,.2);border-radius:999px;padding:2px 4px}
+.opponent-hand{display:flex;align-items:center;position:relative;width:40px;height:38px;flex:0 0 40px}
+.mini-card-back{position:absolute;width:17px;height:27px;border-radius:4px;background:linear-gradient(145deg,#263c32,#14231d);border:1px solid rgba(214,184,106,.35);box-shadow:0 3px 6px rgba(0,0,0,.28)}
+.mini-card-back:after{content:'';position:absolute;inset:3px;border:1px solid rgba(214,184,106,.16);border-radius:2px}
+.mini-card-back:nth-child(1){left:0;transform:rotate(-9deg)}
+.mini-card-back:nth-child(2){left:7px;transform:rotate(-3deg)}
+.mini-card-back:nth-child(3){left:14px;transform:rotate(3deg)}
+.mini-card-back:nth-child(4){left:21px;transform:rotate(9deg)}
+.illegal-opening-callout{display:grid;gap:5px;margin:8px 0 20px;padding:16px;border:1px solid rgba(230,126,121,.25);border-radius:16px;background:rgba(230,126,121,.06)}
+.illegal-opening-callout b{font:800 19px Manrope;color:var(--text)}
+.illegal-opening-callout span{font:800 25px Manrope;color:var(--danger)}
+.illegal-opening-callout small{font-size:9px;color:var(--muted);line-height:1.5}
+
+@media(max-width:900px){
+  .game-top{height:auto;min-height:58px;padding:8px 12px;grid-template-columns:1fr auto;gap:7px}
+  .turn-status{grid-column:1/-1;grid-row:2;justify-self:center;max-width:100%;font-size:9px;padding:7px 10px}
+  .connection{display:none}
+  .game-board{height:auto;min-height:calc(100dvh - 58px);grid-template-rows:auto minmax(300px,1fr) auto}
+  .opponents{padding:8px 10px;justify-content:flex-start;overflow-x:auto;scrollbar-width:none}
+  .opponents::-webkit-scrollbar{display:none}
+  .opponent{min-width:185px}
+  .table-center{min-height:330px}
+  .piles{gap:14px;max-width:100%;justify-content:center}
+  .my-area{padding:0 12px max(14px,env(safe-area-inset-bottom))}
+  .my-info{grid-template-columns:1fr;gap:9px;max-width:100%}
+  .my-info>div:first-child{justify-content:space-between}
+  .score-summary{justify-content:space-between;width:100%}
+  .my-name{justify-content:flex-start}
+  .hand{gap:5px;min-height:125px;overflow-x:auto;padding:0 3px 4px;justify-content:flex-start;scrollbar-width:none}
+  .hand::-webkit-scrollbar{display:none}
+  .card.playing{flex:0 0 76px;width:76px;height:108px;padding:8px;border-radius:10px}
+  .card.playing strong{font-size:35px}
+  .card.playing.selected{transform:translateY(-12px)}
+  .controls{margin-top:10px}
+  .controls .drop-btn,.controls .open-btn{width:100%;min-height:44px}
+  .table-message{bottom:3%;text-align:center;padding:0 15px}
+}
+
+@media(max-width:600px){
+  .game-top{padding-top:max(7px,env(safe-area-inset-top));}
+  .round-meta{font-size:8px;gap:7px}
+  .voice-panel{position:static;margin-left:0;justify-self:end}
+  .voice-title{display:none}
+  .table-center{min-height:290px}
+  .table-center:before{width:96vw;height:245px}
+  .piles{gap:5px;transform:none;width:100%;overflow:visible}
+  .pile-wrap{gap:5px;min-width:0}
+  .playing.small,.empty-pile,.deck-back,.drop-target{width:62px;height:90px;border-radius:9px}
+  .playing.small{font-size:16px;padding:7px}
+  .playing.small strong{font-size:28px}
+  .drop-target span{font-size:6px;text-align:center}
+  .drop-target strong{font-size:8px}
+  .pile-label{font-size:5.5px;letter-spacing:.12em;white-space:nowrap}
+  .joker-zone{width:68px;min-height:98px;transform:none}
+  .joker-card,.joker-empty{width:45px;height:62px}
+  .joker-card>span{font-size:12px}.joker-card>strong{font-size:21px}.joker-card>em{font-size:5px}
+  .joker-zone-label,.joker-rule{font-size:5px}
+  .opponent{min-width:165px;padding:7px 8px}
+  .opponent-hand{width:34px;flex-basis:34px;transform:scale(.9);transform-origin:left center}
+  .opp-copy b{font-size:10px}.opp-copy span{font-size:8px}
+  .score-summary{gap:7px}
+  .hand-score-private{padding:5px 6px}
+  .hand-score-private b{font-size:13px}
+  .hand-score-private span{font-size:6px}
+  .hand{min-height:115px}
+  .card.playing{flex-basis:70px;width:70px;height:100px}
+  .result-modal,.winner-modal{max-height:calc(100dvh - 24px);overflow:auto;padding:20px 14px;border-radius:18px}
+  .result-modal h2{font-size:23px}
+  .illegal-opening-callout span{font-size:21px}
+}

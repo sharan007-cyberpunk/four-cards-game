@@ -93,11 +93,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
     setDragCode(null);
   };
 
-  const dropDraggedCard = () => {
-    if (!dragCode || !myTurn || !legal.includes('DROP')) return;
-    drop([dragCode]);
-  };
-
   if (!state) {
     return (
       <div className="full-loading">
@@ -183,17 +178,28 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 }
               }}
             >
-              <span className="pile-label">PREVIOUS CARD <b>TAKE</b></span>
+              <span className="pile-label">PREVIOUS CARD</span>
               {state.previousTopDropCard ? (
                 <PlayingCard code={state.previousTopDropCard} small nonInteractive/>
               ) : (
                 <div className="empty-pile">NO CARD</div>
               )}
-              {legal.includes('TAKE_DROP') && <small className="click-hint">Click to take</small>}
+              {legal.includes('TAKE_DROP') && <small className="click-hint">Tap to take</small>}
             </div>
 
             <div
               className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''}`}
+              role={myTurn && legal.includes('DROP') ? 'button' : undefined}
+              tabIndex={myTurn && legal.includes('DROP') ? 0 : -1}
+              onClick={() => {
+                if (myTurn && legal.includes('DROP') && selected.length) drop();
+              }}
+              onKeyDown={e => {
+                if ((e.key === 'Enter' || e.key === ' ') && myTurn && legal.includes('DROP') && selected.length) {
+                  e.preventDefault();
+                  drop();
+                }
+              }}
               onDragOver={e => {
                 if (myTurn && legal.includes('DROP')) {
                   e.preventDefault();
@@ -202,8 +208,19 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
               }}
               onDrop={e => {
                 e.preventDefault();
-                const code = e.dataTransfer.getData('text/plain') || dragCode;
-                if (code) drop([code]);
+                const grouped = e.dataTransfer.getData('application/x-four-cards');
+                if (grouped) {
+                  try {
+                    const codes = JSON.parse(grouped);
+                    if (Array.isArray(codes) && codes.length) {
+                      drop(codes);
+                      return;
+                    }
+                  } catch (_) {}
+                }
+                const raw = e.dataTransfer.getData('text/plain') || dragCode || '';
+                const codes = raw.split(',').filter(Boolean);
+                if (codes.length) drop(codes);
               }}
             >
               <span className="pile-label">DROP AREA <b>THIS MOVE</b></span>
@@ -233,7 +250,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
             >
               <span className="pile-label">DRAW DECK <b>{state.deckCount}</b></span>
               <div className="deck-back" aria-label="Draw deck"><div/><div/></div>
-              {legal.includes('DRAW_DECK') && <small className="click-hint">Click to draw</small>}
+              {legal.includes('DRAW_DECK') && <small className="click-hint">Tap to draw</small>}
             </div>
 
             <div className="joker-zone" aria-label="Immutable Joker card">
@@ -248,10 +265,17 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
 
         <div className="my-area">
           <div className="my-info">
-            <div>
-              <span className="panel-kicker">YOUR SCORE</span>
-              <strong>{me?.score ?? 0}</strong>
-              <span>/ {state.targetScore}</span>
+            <div className="score-summary">
+              <div className="score-line">
+                <span className="panel-kicker">CUMULATIVE</span>
+                <strong>{me?.score ?? 0}</strong>
+                <span>/ {state.targetScore}</span>
+              </div>
+              <div className="hand-score-private">
+                <span>HAND SCORE</span>
+                <b>{privateState?.handScore ?? 0}</b>
+                <em>PRIVATE</em>
+              </div>
             </div>
 
             <div className="score-track">
@@ -287,9 +311,13 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 index={index}
                 draggable={!open && myTurn && legal.includes('DROP')}
                 onDragStart={e => {
+                  const dragCodes = selected.includes(card.code) && selected.length
+                    ? selected
+                    : [card.code];
                   setDragCode(card.code);
                   e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', card.code);
+                  e.dataTransfer.setData('application/x-four-cards', JSON.stringify(dragCodes));
+                  e.dataTransfer.setData('text/plain', dragCodes.join(','));
                 }}
                 onDragEnd={() => setDragCode(null)}
                 onDragOver={e => {
@@ -297,7 +325,8 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 }}
                 onDrop={e => {
                   e.preventDefault();
-                  const dragged = e.dataTransfer.getData('text/plain') || dragCode;
+                  const raw = e.dataTransfer.getData('text/plain') || dragCode || '';
+                  const dragged = raw.split(',')[0];
                   if (!dragged || dragged === card.code) return;
 
                   setHandOrder(order => {
@@ -331,15 +360,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
             ) : (
               <>
                 <button
-                  className="btn action-secondary"
-                  disabled={!myTurn || !legal.includes('TAKE_DROP')}
-                  onClick={() => action('take')}
-                >
-                  <span>Take</span>
-                  <small>PREVIOUS DROP</small>
-                </button>
-
-                <button
                   className="btn primary drop-btn"
                   disabled={!myTurn || !legal.includes('DROP') || !canDropSelected}
                   onClick={() => drop()}
@@ -348,15 +368,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                     ? `${selected.length} card${selected.length > 1 ? 's' : ''}`
                     : ''}
                   <span>→</span>
-                </button>
-
-                <button
-                  className="btn action-secondary"
-                  disabled={!myTurn || !legal.includes('DRAW_DECK')}
-                  onClick={() => action('draw')}
-                >
-                  <span>Draw</span>
-                  <small>FROM DECK</small>
                 </button>
 
                 {legal.includes('OPEN') && (
@@ -453,6 +464,12 @@ function Opponent({player, active, compact, voiceStatus}) {
         player.status !== 'CONNECTED' ? 'dimmed' : ''
       } ${voiceSpeaking ? 'voice-speaking' : ''}`}
     >
+      <div className="opponent-hand" aria-label={`${player.handSize ?? 0} unrevealed cards`}>
+        {Array.from({length: Math.min(player.handSize ?? 0, 4)}).map((_, i) => (
+          <span className="mini-card-back" key={i}/>
+        ))}
+      </div>
+
       <Avatar name={player.name}/>
 
       <div className="opp-copy">
@@ -597,14 +614,24 @@ function RoundResult({state, room, action}) {
             <b>{state.roundWinnerHandScore ?? 0} <small>HAND SCORE</small></b>
           </div>
         ) : (
-          <p>{state.message}</p>
+          <div className="illegal-opening-callout">
+            <b>Lowest score: {state.illegalOpeningWinnerName || 'Unknown'}</b>
+            <span>{state.illegalOpeningLowestScore ?? '—'} hand score</span>
+            <small>Your opening was invalid, so the opener receives +40 points.</small>
+          </div>
         )}
 
-        <div className="results-list">
+        <div className="results-list round-scores">
+          <div className="results-header">
+            <span>PLAYER</span>
+            <span>ROUND</span>
+            <span>CUMULATIVE</span>
+          </div>
           {state.players.map(p => (
             <div key={p.id}>
               <span>{p.name}</span>
-              <b>{p.score}</b>
+              <b>{p.roundScore ?? 0}</b>
+              <strong>{p.score}</strong>
             </div>
           ))}
         </div>
@@ -615,7 +642,7 @@ function RoundResult({state, room, action}) {
           </button>
         )}
 
-        <small>Scores shown are cumulative.</small>
+        <small>Round score shows the points added this round. Cumulative is the total score.</small>
       </div>
     </div>
   );
