@@ -205,10 +205,27 @@ public class GameService {
                 throw new IllegalStateException("Timer settings are locked after the game starts");
             if (!game.player(pid).host)
                 throw new IllegalStateException("Only host can change the turn timer");
-            if (seconds < 5 || seconds > 120)
-                throw new IllegalArgumentException("Turn timer must be between 5 and 120 seconds");
+            if (seconds != 0 && (seconds < 5 || seconds > 120))
+                throw new IllegalArgumentException("Turn timer must be OFF or between 5 and 120 seconds");
+            game.timerEnabled = seconds != 0;
             game.turnSeconds = seconds;
-            broadcast(game, "Turn timer set to " + seconds + " seconds");
+            broadcast(game, seconds == 0 ? "Turn timer disabled" : "Turn timer set to " + seconds + " seconds");
+        }
+    }
+
+    // =========================================================
+    // HAND SCORE VISIBILITY
+    // =========================================================
+
+    public void setShowHandScores(String code, String pid, boolean enabled) {
+        GameRuntime game = requireRoom(code);
+        synchronized (game) {
+            if (game.phase != GamePhase.LOBBY)
+                throw new IllegalStateException("Hand score settings are locked after the game starts");
+            if (!game.player(pid).host)
+                throw new IllegalStateException("Only host can change hand score visibility");
+            game.showHandScores = enabled;
+            broadcast(game, enabled ? "Hand scores enabled" : "Hand scores hidden");
         }
     }
 
@@ -810,6 +827,8 @@ public class GameService {
                                 p.id,
                                 p.name,
                                 p.score,
+                                p.roundScore,
+                                p.hand.size(),
                                 p.status,
                                 p.host,
                                 p.dealer,
@@ -833,6 +852,7 @@ public class GameService {
                 players,
                 cur == null ? null : cur.id,
                 top,
+                g.pendingDropCards.stream().map(c -> CardDto.of(c, g.jokerRank)).toList(),
                 g.jokerRank == null ? null : g.jokerRank.symbol,
                 joker,
                 g.deck == null ? 0 : g.deck.size(),
@@ -844,7 +864,12 @@ public class GameService {
                         ? null
                         : g.openingEndsAt.toEpochMilli(),
                 g.openingPlayerId,
-                (int) g.turnSeconds
+                g.timerEnabled ? (int) g.turnSeconds : 0,
+                g.showHandScores,
+                g.openingSuccess,
+                g.lowestScorePlayerId,
+                g.lowestScore,
+                g.openingLoserId
         );
     }
 

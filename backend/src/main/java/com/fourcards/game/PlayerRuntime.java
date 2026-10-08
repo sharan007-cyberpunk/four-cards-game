@@ -12,6 +12,8 @@ public class PlayerRuntime {
 
     public final List<Card> hand = new ArrayList<>();
     public int score;
+    /** Points earned in the current round; null outside round-result presentation. */
+    public Integer roundScore;
     public PlayerStatus status = PlayerStatus.CONNECTED;
     public boolean dealer;
     /** Current WebSocket session. Older sessions cannot disconnect a newer one. */

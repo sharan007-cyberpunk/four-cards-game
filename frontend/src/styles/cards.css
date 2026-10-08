@@ -779,3 +779,59 @@
 .withdraw-open{min-height:38px;padding:0 11px;font-size:9px;white-space:nowrap}
 .open-lock .countdown{min-width:34px;text-align:center}
 @media(max-width:900px){.piles{gap:16px}.drop-target,.playing.small,.empty-pile,.deck-back{width:72px;height:104px}.current-drop-area{min-width:80px}.pile-label{font-size:7px}.joker-zone{transform:scale(.9)}.withdraw-open{font-size:8px;padding:0 8px}}
+
+/* Opponent hands: card count is represented visually, never as a numeric label. */
+.opponent-hand{display:flex;align-items:center;min-width:58px;height:38px;margin-left:auto;position:relative;padding-left:2px}
+.face-down-card{width:25px;height:34px;border-radius:5px;background:#1b2b24;border:1px solid rgba(255,255,255,.16);box-shadow:2px 2px 0 rgba(0,0,0,.2);margin-left:-8px;display:grid;place-items:center;position:relative;overflow:hidden}
+.face-down-card:after{content:'';position:absolute;inset:3px;border:1px solid rgba(214,184,106,.28);border-radius:3px;transform:rotate(45deg)}
+.face-down-card span{font-size:9px;color:rgba(214,184,106,.55);z-index:1}
+.timer-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.timer-options button{border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--muted);border-radius:8px;padding:7px 9px;font-size:10px;font-weight:700}
+.timer-options button.selected{border-color:rgba(214,184,106,.42);background:rgba(214,184,106,.1);color:var(--primary)}
+.timer-options button:disabled{opacity:.45;cursor:not-allowed}
+.timer-options.two button{flex:1}
+.hand-score-setting{margin-top:14px}
+.result-head{color:var(--faint)!important;font-size:8px!important;letter-spacing:.12em!important}
+.round-results div{display:grid!important;grid-template-columns:1fr 64px 64px;gap:10px;align-items:center}
+.round-results div b{text-align:right}
+.round-results .round-loser{background:rgba(230,126,121,.06);border-radius:8px;color:#f0c9c6}
+.opening-failure{border:1px solid rgba(230,126,121,.22);background:rgba(230,126,121,.06);border-radius:12px;padding:12px;margin:0 0 18px;display:flex;flex-direction:column;gap:5px;text-align:left}
+.opening-failure strong{font-size:11px;color:var(--text)}
+.opening-failure span{font-size:9px;color:var(--muted)}
+@media(max-width:600px){.opponent-hand{min-width:48px}.face-down-card{width:21px;height:30px}.round-results div{grid-template-columns:1fr 52px 52px}}
+
+/* Current-turn drop is a temporary holding area. The previous discard and draw deck are clickable sources. */
+.clickable-pile,
+.clickable-deck {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+.clickable-pile.clickable,
+.clickable-deck.clickable { cursor: pointer; }
+.clickable-pile.clickable .card,
+.clickable-deck.clickable .deck-back {
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.clickable-pile.clickable:hover .card,
+.clickable-pile.clickable:focus-visible .card {
+  transform: translateY(-5px) scale(1.03);
+  box-shadow: 0 14px 28px rgba(0,0,0,.3), 0 0 0 1px rgba(214,184,106,.34);
+}
+.clickable-deck.clickable:hover .deck-back,
+.clickable-deck.clickable:focus-visible .deck-back {
+  transform: translateY(-5px) scale(1.03);
+  filter: brightness(1.12);
+}
+.clickable-pile:disabled,
+.clickable-deck:disabled { opacity: 1; cursor: default; }
+.click-hint { display:block; margin-top:5px; color:var(--primary); font-size:7px; letter-spacing:.08em; text-transform:uppercase; }
+.pending-drop-cards { min-height:120px; min-width:104px; display:flex; align-items:center; justify-content:center; position:relative; }
+.pending-drop-cards .card { margin-left:-24px; transform:rotate(calc((var(--i) - 1) * 3deg)); }
+.pending-drop-cards .card:first-child { margin-left:0; }
+.current-drop-area.has-pending { border-color:rgba(214,184,106,.38); background:rgba(214,184,106,.045); }
+.current-drop-area.has-pending .drop-hint { color:var(--primary); }

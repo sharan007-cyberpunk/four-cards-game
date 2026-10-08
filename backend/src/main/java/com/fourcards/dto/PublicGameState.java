@@ -9,6 +9,7 @@ public record PublicGameState(
     List<PlayerPublicDto> players,
     String currentPlayerId,
     String topDropCard,
+    List<CardDto> pendingDropCards,
     String jokerRank,
     CardDto jokerCard,
     int deckCount,
@@ -18,5 +19,10 @@ public record PublicGameState(
     Long turnEndsAt,
     Long openingEndsAt,
     String openingPlayerId,
-    int turnSeconds
+    int turnSeconds,
+    boolean showHandScores,
+    Boolean openingSuccess,
+    String lowestScorePlayerId,
+    Integer lowestScore,
+    String openingLoserId
 ) {}

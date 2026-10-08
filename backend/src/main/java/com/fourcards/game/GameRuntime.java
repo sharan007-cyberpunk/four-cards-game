@@ -21,6 +21,10 @@ public class GameRuntime {
   public Instant turnEndsAt;
   /** Host-configured turn duration for this room. */
   public long turnSeconds = 15;
+  /** 0 means the turn timer is disabled. */
+  public boolean timerEnabled = true;
+  /** Host-controlled option: reveal numeric values on the local hand. */
+  public boolean showHandScores = true;
   /** Original turn deadline retained while an opening is being confirmed. */
   public Instant openingOriginalTurnEndsAt;
 
@@ -34,11 +38,17 @@ public class GameRuntime {
 
   /** Card that was visible when the current player's turn began. */
   public Card previousTopDropCard;
+  /** Cards dropped during the current turn but not yet committed to the discard pile. */
+  public final List<Card> pendingDropCards = new ArrayList<>();
 
   public String message = "";
   public Instant openingEndsAt;
   public String openingPlayerId;
   public boolean mustDrawAfterDrop;
+  public Boolean openingSuccess;
+  public String lowestScorePlayerId;
+  public Integer lowestScore;
+  public String openingLoserId;
 
   public GameRuntime(String roomCode) {
     this.roomCode = roomCode;
@@ -68,9 +78,10 @@ public class GameRuntime {
   public void beginTurn(long turnSeconds) {
     previousTopDropCard = dropPile.peekFirst();
     mustDrawAfterDrop = false;
+    pendingDropCards.clear();
     PlayerRuntime current = currentPlayer();
     turnPlayerId = current == null ? null : current.id;
-    turnEndsAt = current == null ? null : Instant.now().plusSeconds(turnSeconds);
+    turnEndsAt = current == null || turnSeconds <= 0 ? null : Instant.now().plusSeconds(turnSeconds);
   }
 
   /** Compatibility helper for tests/older callers. */
@@ -109,7 +120,8 @@ public class GameRuntime {
     turnPlayerId = next.id;
     previousTopDropCard = dropPile.peekFirst();
     mustDrawAfterDrop = false;
-    turnEndsAt = Instant.now().plusSeconds(turnSeconds);
+    pendingDropCards.clear();
+    turnEndsAt = turnSeconds <= 0 ? null : Instant.now().plusSeconds(turnSeconds);
   }
 
   public void advanceTurn() { advanceTurn(15); }

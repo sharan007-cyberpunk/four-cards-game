@@ -272,7 +272,7 @@ function Join({ onBack, onJoin }) {
   );
 }
 
-function Lobby({ room, state, onBack, onStart, onTarget, onTimer }) {
+function Lobby({ room, state, onBack, onStart, onTarget, onTimer, onHandScores }) {
   const me = state?.players?.find(p => p.id === room.playerId);
   const host = me?.host;
 
@@ -407,20 +407,48 @@ function Lobby({ room, state, onBack, onStart, onTarget, onTimer }) {
             <div className="timer-setting-head">
               <div>
                 <span className="panel-kicker">TURN TIMER</span>
-                <b>{state?.turnSeconds ?? 15}s</b>
+                <b>{state?.turnSeconds ? `${state.turnSeconds}s` : 'OFF'}</b>
               </div>
               <span>HOST ONLY</span>
             </div>
-            <input
-              type="range"
-              min="5"
-              max="120"
-              step="5"
-              value={state?.turnSeconds ?? 15}
-              disabled={!host}
-              onChange={e => onTimer(Number(e.target.value))}
-            />
-            <small>Time allowed for each player to complete their turn. The server controls the deadline.</small>
+            <div className="timer-options">
+              {[0, 10, 15, 20, 30, 45, 60, 90, 120].map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  className={(state?.turnSeconds ?? 15) === v ? 'selected' : ''}
+                  disabled={!host}
+                  onClick={() => onTimer(v)}
+                >
+                  {v === 0 ? 'OFF' : `${v}s`}
+                </button>
+              ))}
+            </div>
+            <small>Turn timer can be disabled. When enabled, the server controls the deadline.</small>
+          </div>
+
+          <div className="timer-setting hand-score-setting">
+            <div className="timer-setting-head">
+              <div>
+                <span className="panel-kicker">HAND SCORES</span>
+                <b>{state?.showHandScores ? 'VISIBLE' : 'HIDDEN'}</b>
+              </div>
+              <span>HOST ONLY</span>
+            </div>
+            <div className="timer-options two">
+              {[true, false].map(v => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  className={Boolean(state?.showHandScores) === v ? 'selected' : ''}
+                  disabled={!host}
+                  onClick={() => onHandScores(v)}
+                >
+                  {v ? 'Show scores' : 'Hide scores'}
+                </button>
+              ))}
+            </div>
+            <small>When enabled, players see the numeric value on cards in their own hand.</small>
           </div>
 
           <p className="setting-help">
