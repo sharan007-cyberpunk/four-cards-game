@@ -34,6 +34,8 @@ public class GameRuntime {
 
   /** Card that was visible when the current player's turn began. */
   public Card previousTopDropCard;
+  /** Card(s) dropped during the current turn, shown temporarily in the center drop area. */
+  public Card currentTurnDropCard;
 
   public String message = "";
 
@@ -74,6 +76,7 @@ public class GameRuntime {
 
   public void beginTurn(long turnSeconds) {
     previousTopDropCard = dropPile.peekFirst();
+    currentTurnDropCard = null;
     mustDrawAfterDrop = false;
     PlayerRuntime current = currentPlayer();
     turnPlayerId = current == null ? null : current.id;
@@ -87,6 +90,7 @@ public class GameRuntime {
     List<PlayerRuntime> active = activePlayers();
     if (active.isEmpty()) {
       previousTopDropCard = null;
+      currentTurnDropCard = null;
       turnPlayerId = null;
       turnEndsAt = null;
       return;
@@ -107,6 +111,7 @@ public class GameRuntime {
 
     if (next == null) {
       previousTopDropCard = null;
+      currentTurnDropCard = null;
       turnPlayerId = null;
       turnEndsAt = null;
       return;
@@ -115,6 +120,7 @@ public class GameRuntime {
     turnIndex = active.indexOf(next);
     turnPlayerId = next.id;
     previousTopDropCard = dropPile.peekFirst();
+    currentTurnDropCard = null;
     mustDrawAfterDrop = false;
     turnEndsAt = turnSeconds <= 0 ? null : Instant.now().plusSeconds(turnSeconds);
   }

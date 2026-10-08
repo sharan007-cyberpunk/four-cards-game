@@ -96,7 +96,9 @@ public class GameEngine {
     }
 
     // The player can only take the card that was visible when their turn began.
-    // Newly dropped cards stay above it.
+    // Newly dropped cards stay in the discard history, while the center drop area
+    // temporarily shows the card(s) played during this turn.
+    g.currentTurnDropCard = selected.get(selected.size() - 1);
     g.mustDrawAfterDrop = true;
     g.message = p.name + " dropped " + selected.size()
         + " card" + (selected.size() > 1 ? "s" : "");

@@ -827,9 +827,11 @@ public class GameService {
 
         PlayerRuntime cur = g.currentPlayer();
 
-        String top = g.dropPile.isEmpty()
+        // The center DROP AREA is intentionally empty at the start of each turn.
+        // It only displays the card played during the current player's move.
+        String top = g.currentTurnDropCard == null
                 ? null
-                : g.dropPile.peekFirst().code();
+                : g.currentTurnDropCard.code();
         String previousTop = g.previousTopDropCard == null
                 ? null
                 : g.previousTopDropCard.code();

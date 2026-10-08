@@ -206,13 +206,13 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 if (code) drop([code]);
               }}
             >
-              <span className="pile-label">DROP AREA <b>CURRENT DROP</b></span>
+              <span className="pile-label">DROP AREA <b>THIS MOVE</b></span>
               {state.topDropCard ? (
                 <PlayingCard code={state.topDropCard} small nonInteractive/>
               ) : (
                 <div className="drop-target">
-                  <span>DROP</span>
-                  <strong>YOUR CARD</strong>
+                  <span>DROP AREA</span>
+                  <strong>EMPTY</strong>
                 </div>
               )}
               {myTurn && legal.includes('DROP') && <small className="drop-hint">Drag a card here</small>}
