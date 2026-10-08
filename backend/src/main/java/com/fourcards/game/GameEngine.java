@@ -66,7 +66,15 @@ public class GameEngine {
     if(success){ g.roundWinnerId=opener.id; g.roundWinnerName=opener.name; g.roundWinnerHandScore=openerScore; }
     eliminateAtTarget(g); g.phase=GamePhase.ROUND_RESULT; g.message=success?opener.name+" won the round":"Opening failed — +40 penalty";
     g.openingEndsAt=null; g.openingPlayerId=null;
-    if(g.activePlayers().size()<=1){ PlayerRuntime winner=g.activePlayers().isEmpty()?null:g.activePlayers().get(0); g.phase=GamePhase.GAME_OVER; if(winner!=null) g.message="Winner is "+winner.name; }
+    if(g.activePlayers().size()<=1){
+      PlayerRuntime winner=g.activePlayers().isEmpty()?null:g.activePlayers().get(0);
+      g.phase=GamePhase.GAME_OVER;
+      if(winner!=null){
+        g.finalWinnerId=winner.id;
+        g.finalWinnerName=winner.name;
+        g.message="Winner is "+winner.name;
+      }
+    }
   }
   public synchronized void nextRound(GameRuntime g){
     if(g.phase!=GamePhase.ROUND_RESULT) throw new IllegalStateException("Round is not complete");
