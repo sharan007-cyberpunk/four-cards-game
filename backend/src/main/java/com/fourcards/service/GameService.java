@@ -844,7 +844,11 @@ public class GameService {
                         ? null
                         : g.openingEndsAt.toEpochMilli(),
                 g.openingPlayerId,
-                (int) g.turnSeconds
+                (int) g.turnSeconds,
+                g.roundWinnerName,
+                g.roundWinnerHandScore,
+                g.finalWinnerName,
+                g.finalWinnerScore
         );
     }
 

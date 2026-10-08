@@ -202,6 +202,11 @@ public class GameEngine {
 
     boolean success = openerScore <= lowest;
 
+    // Store the opening result using the actual player's name and hand score.
+    // This is server-authoritative and is exposed to all clients only as round-result metadata.
+    g.roundWinnerName = success ? opener.name : null;
+    g.roundWinnerHandScore = success ? openerScore : null;
+
     for (var e : scores.entrySet()) {
       e.getKey().score += e.getKey() == opener
           ? (success ? 0 : 40)
@@ -218,8 +223,15 @@ public class GameEngine {
     g.openingOriginalTurnEndsAt = null;
     g.openingPlayerId = null;
 
-    if (g.activePlayers().size() <= 1)
+    if (g.activePlayers().size() <= 1) {
+      PlayerRuntime winner = g.activePlayers().stream().findFirst().orElse(null);
+      if (winner != null) {
+        g.finalWinnerName = winner.name;
+        g.finalWinnerScore = winner.score;
+        g.message = winner.name + " is the final player standing";
+      }
       g.phase = GamePhase.GAME_OVER;
+    }
   }
 
   /** Resolve a turn that expired before the player completed it. */
@@ -251,6 +263,11 @@ public class GameEngine {
       throw new IllegalStateException("Round is not complete");
 
     if (g.activePlayers().size() <= 1) {
+      PlayerRuntime winner = g.activePlayers().stream().findFirst().orElse(null);
+      if (winner != null) {
+        g.finalWinnerName = winner.name;
+        g.finalWinnerScore = winner.score;
+      }
       g.phase = GamePhase.GAME_OVER;
       return;
     }

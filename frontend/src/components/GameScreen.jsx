@@ -541,18 +541,29 @@ function Countdown({endsAt}) {
 
 function RoundResult({state, room, action}) {
   const me = state.players.find(p => p.id === room.playerId);
+  const openingSucceeded = Boolean(state.roundWinnerName);
+  const roundWinner = state.roundWinnerName;
 
   return (
     <div className="overlay">
-      <div className="result-modal">
+      <div className={`result-modal ${openingSucceeded ? 'legal-opening' : ''}`}>
         <div className="result-icon"><Sparkles/></div>
         <span className="eyebrow center">ROUND COMPLETE</span>
         <h2>
-          {state.message.includes('failed')
-            ? 'OPEN FAILED'
-            : 'ROUND RESOLVED'}
+          {openingSucceeded
+            ? `${roundWinner} has won the round!`
+            : 'OPEN FAILED'}
         </h2>
-        <p>{state.message}</p>
+
+        {openingSucceeded ? (
+          <div className="round-winner-callout">
+            <strong>{roundWinner}</strong>
+            <span>Legal opening — lowest hand score</span>
+            <b>{state.roundWinnerHandScore ?? 0} <small>HAND SCORE</small></b>
+          </div>
+        ) : (
+          <p>{state.message}</p>
+        )}
 
         <div className="results-list">
           {state.players.map(p => (
@@ -563,7 +574,7 @@ function RoundResult({state, room, action}) {
           ))}
         </div>
 
-        {me?.host && (
+        {me?.host && state.phase === 'ROUND_RESULT' && (
           <button className="btn primary wide" onClick={() => action('next')}>
             Next round <span>→</span>
           </button>
@@ -576,17 +587,30 @@ function RoundResult({state, room, action}) {
 }
 
 function Winner({state}) {
-  const winner = state.players.find(p => p.status !== 'ELIMINATED');
+  const winner = state.finalWinnerName
+    ? state.players.find(p => p.name === state.finalWinnerName)
+    : state.players.find(p => p.status !== 'ELIMINATED');
+
+  const winnerName = state.finalWinnerName || winner?.name || 'Winner';
+  const winnerScore = state.finalWinnerScore ?? winner?.score ?? 0;
 
   return (
     <div className="overlay winner-overlay">
       <div className="winner-modal">
+        <img
+          className="party-popper"
+          src="/party-popper.gif"
+          alt="Party popper celebration"
+        />
         <div className="trophy"><Crown size={28}/></div>
         <span className="eyebrow center">GAME COMPLETE</span>
-        <h1>{winner?.name || 'Winner'}</h1>
+        <h1>{winnerName}</h1>
         <p>Final player standing</p>
+        <div className="winner-announcement">
+          Winner is <strong>{winnerName}</strong>
+        </div>
         <div className="winner-score">
-          {winner?.score ?? 0}
+          {winnerScore}
           <span>PTS</span>
         </div>
 
