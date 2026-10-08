@@ -38,6 +38,8 @@ public class GameRuntime {
 
   /** Card that was visible when the current player's turn began. */
   public Card previousTopDropCard;
+  /** Cards dropped during the current turn but not yet committed to the discard pile. */
+  public final List<Card> pendingDropCards = new ArrayList<>();
 
   public String message = "";
   public Instant openingEndsAt;
@@ -76,6 +78,7 @@ public class GameRuntime {
   public void beginTurn(long turnSeconds) {
     previousTopDropCard = dropPile.peekFirst();
     mustDrawAfterDrop = false;
+    pendingDropCards.clear();
     PlayerRuntime current = currentPlayer();
     turnPlayerId = current == null ? null : current.id;
     turnEndsAt = current == null || turnSeconds <= 0 ? null : Instant.now().plusSeconds(turnSeconds);
@@ -117,6 +120,7 @@ public class GameRuntime {
     turnPlayerId = next.id;
     previousTopDropCard = dropPile.peekFirst();
     mustDrawAfterDrop = false;
+    pendingDropCards.clear();
     turnEndsAt = turnSeconds <= 0 ? null : Instant.now().plusSeconds(turnSeconds);
   }
 

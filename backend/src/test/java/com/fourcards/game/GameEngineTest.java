@@ -19,13 +19,26 @@ class GameEngineTest {
     Card dropped=p.hand.get(0);
     e.drop(g,p.id,List.of(dropped.code()));
 
-    assertEquals(dropped,g.dropPile.peekFirst());
+    assertEquals(previous,g.dropPile.peekFirst());
     assertTrue(g.dropPile.contains(previous));
+    assertEquals(List.of(dropped),g.pendingDropCards);
 
     e.takeDrop(g,p.id);
 
     assertTrue(p.hand.contains(previous));
     assertFalse(p.hand.contains(dropped));
+    assertEquals(dropped,g.dropPile.peekFirst());
+    assertTrue(g.pendingDropCards.isEmpty());
+  }
+
+  @Test void drawDeckCommitsTemporaryDrop(){
+    GameRuntime g=game(); GameEngine e=new GameEngine(10); e.start(g);
+    PlayerRuntime p=g.currentPlayer();
+    Card dropped=p.hand.get(0);
+    e.drop(g,p.id,List.of(dropped.code()));
+    assertEquals(1,g.pendingDropCards.size());
+    e.drawDeck(g,p.id);
+    assertTrue(g.pendingDropCards.isEmpty());
     assertEquals(dropped,g.dropPile.peekFirst());
   }
 

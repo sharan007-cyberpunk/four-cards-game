@@ -168,16 +168,24 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
 
           <div className="piles">
             <div className="pile-wrap previous-drop-wrap">
-              <span className="pile-label">PREVIOUS DROP <b>VISIBLE</b></span>
+              <span className="pile-label">PREVIOUS DROP <b>TAKE</b></span>
               {state.topDropCard ? (
-                <PlayingCard code={state.topDropCard} small nonInteractive/>
+                <button
+                  className={`clickable-pile ${myTurn && legal.includes('TAKE_DROP') ? 'clickable' : ''}`}
+                  disabled={!myTurn || !legal.includes('TAKE_DROP')}
+                  aria-label="Take previous drop"
+                  onClick={() => action('take')}
+                >
+                  <PlayingCard code={state.topDropCard} small nonInteractive/>
+                </button>
               ) : (
                 <div className="empty-pile">PREVIOUS DROP</div>
               )}
+              {myTurn && legal.includes('TAKE_DROP') && <small className="click-hint">Click to take</small>}
             </div>
 
             <div
-              className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''}`}
+              className={`pile-wrap current-drop-area ${myTurn && legal.includes('DROP') ? 'ready' : ''} ${state.pendingDropCards?.length ? 'has-pending' : ''}`}
               onDragOver={e => {
                 if (myTurn && legal.includes('DROP')) {
                   e.preventDefault();
@@ -190,17 +198,40 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                 if (code) drop([code]);
               }}
             >
-              <span className="pile-label">DROP AREA <b>CURRENT TURN</b></span>
-              <div className="drop-target">
-                <span>DROP</span>
-                <strong>YOUR CARD</strong>
-              </div>
-              {myTurn && legal.includes('DROP') && <small className="drop-hint">Drag a card here</small>}
+              <span className="pile-label">DROP AREA <b>{state.pendingDropCards?.length ? 'WAITING FOR DRAW' : 'CURRENT TURN'}</b></span>
+              {state.pendingDropCards?.length ? (
+                <div className="pending-drop-cards" aria-label="Cards dropped this turn">
+                  {state.pendingDropCards.map((card, index) => (
+                    <PlayingCard
+                      key={`${card.code}-${index}`}
+                      code={card.code}
+                      small
+                      nonInteractive
+                      index={index}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="drop-target">
+                  <span>DROP</span>
+                  <strong>YOUR CARD</strong>
+                </div>
+              )}
+              {myTurn && legal.includes('DROP') && !state.pendingDropCards?.length && <small className="drop-hint">Drag a card here</small>}
+              {myTurn && state.pendingDropCards?.length > 0 && <small className="drop-hint">Choose the previous drop or deck</small>}
             </div>
 
             <div className="pile-wrap deck-wrap">
               <span className="pile-label">DRAW DECK <b>{state.deckCount}</b></span>
-              <div className="deck-back" aria-label="Draw deck"><div/><div/></div>
+              <button
+                className={`clickable-deck ${myTurn && legal.includes('DRAW_DECK') ? 'clickable' : ''}`}
+                disabled={!myTurn || !legal.includes('DRAW_DECK')}
+                aria-label="Draw from deck"
+                onClick={() => action('draw')}
+              >
+                <div className="deck-back" aria-hidden="true"><div/><div/></div>
+              </button>
+              {myTurn && legal.includes('DRAW_DECK') && <small className="click-hint">Click to draw</small>}
             </div>
 
             <div className="joker-zone" aria-label="Immutable Joker card">
@@ -296,15 +327,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
             ) : (
               <>
                 <button
-                  className="btn action-secondary"
-                  disabled={!myTurn || !legal.includes('TAKE_DROP')}
-                  onClick={() => action('take')}
-                >
-                  <span>Take</span>
-                  <small>PREVIOUS DROP</small>
-                </button>
-
-                <button
                   className="btn primary drop-btn"
                   disabled={!myTurn || !legal.includes('DROP') || !canDropSelected}
                   onClick={() => drop()}
@@ -313,15 +335,6 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
                     ? `${selected.length} card${selected.length > 1 ? 's' : ''}`
                     : ''}
                   <span>→</span>
-                </button>
-
-                <button
-                  className="btn action-secondary"
-                  disabled={!myTurn || !legal.includes('DRAW_DECK')}
-                  onClick={() => action('draw')}
-                >
-                  <span>Draw</span>
-                  <small>FROM DECK</small>
                 </button>
 
                 {legal.includes('OPEN') && (

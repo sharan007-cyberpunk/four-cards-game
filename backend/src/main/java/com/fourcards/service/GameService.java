@@ -852,6 +852,7 @@ public class GameService {
                 players,
                 cur == null ? null : cur.id,
                 top,
+                g.pendingDropCards.stream().map(c -> CardDto.of(c, g.jokerRank)).toList(),
                 g.jokerRank == null ? null : g.jokerRank.symbol,
                 joker,
                 g.deck == null ? 0 : g.deck.size(),
