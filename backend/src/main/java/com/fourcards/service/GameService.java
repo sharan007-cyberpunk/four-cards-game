@@ -21,6 +21,7 @@ public class GameService {
     private final Set<String> scheduledBots = ConcurrentHashMap.newKeySet();
     private final Set<String> scheduledTurnTimeouts = ConcurrentHashMap.newKeySet();
     private final Set<String> scheduledDisconnects = ConcurrentHashMap.newKeySet();
+    private final Set<String> scheduledRoundAdvances = ConcurrentHashMap.newKeySet();
     private final long turnSeconds;
     private final long disconnectGraceSeconds;
 
@@ -280,6 +281,7 @@ public class GameService {
                             engine.evaluateOpening(game);
                             persistRound(game);
                             broadcastAll(game);
+                            scheduleAutomaticNextRound(game);
                         }
                     }
                 },
@@ -522,9 +524,32 @@ public class GameService {
                     engine.evaluateOpening(game);
                     persistRound(game);
                     broadcastAll(game);
+                    scheduleAutomaticNextRound(game);
                 }
             }
         }, delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void scheduleAutomaticNextRound(GameRuntime game) {
+        if (game.phase != GamePhase.ROUND_RESULT) return;
+        if (game.activePlayers().size() <= 1) return;
+
+        String key = game.roomCode + ":" + game.roundNumber;
+        if (!scheduledRoundAdvances.add(key)) return;
+
+        scheduler.schedule(() -> {
+            try {
+                synchronized (game) {
+                    if (game.phase != GamePhase.ROUND_RESULT) return;
+                    if (game.activePlayers().size() <= 1) return;
+                    engine.nextRound(game);
+                    persistRound(game);
+                    broadcastAll(game);
+                }
+            } finally {
+                scheduledRoundAdvances.remove(key);
+            }
+        }, 5, TimeUnit.SECONDS);
     }
 
     private String botName(int index) {
@@ -609,10 +634,8 @@ public class GameService {
         GameRuntime game = requireRoom(code);
         synchronized (game) {
             PlayerRuntime p = game.player(pid);
-            if (p.status == PlayerStatus.ELIMINATED) {
-                throw new IllegalStateException("Player is eliminated");
-            }
-            p.status = PlayerStatus.CONNECTED;
+            // Eliminated players remain spectators and may reconnect for voice chat.
+            if (p.status != PlayerStatus.ELIMINATED) p.status = PlayerStatus.CONNECTED;
             // If this was the current player's disconnect grace period, keep the
             // same turn and the original server deadline. Never reset the timer.
             broadcastAll(game);

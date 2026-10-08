@@ -48,7 +48,7 @@ export function useVoiceChat(
 
   const humans = useMemo(
     () => players.filter(
-      p => p.id !== playerId && !p.bot && p.status === 'CONNECTED'
+      p => p.id !== playerId && !p.bot && (p.status === 'CONNECTED' || p.status === 'ELIMINATED')
     ),
     [players, playerId]
   );

@@ -421,3 +421,134 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* =========================================================
+   HOME + SMALL PHONE RESPONSIVE FIX
+   ========================================================= */
+@media (max-width: 600px) {
+  .landing {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 26px;
+    padding: 28px 0 24px;
+    min-height: auto;
+  }
+
+  .hero-copy {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(40px, 13vw, 56px);
+    margin: 18px 0 16px;
+  }
+
+  .hero-copy p {
+    max-width: 100%;
+    font-size: 14px;
+  }
+
+  .cta-row {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .cta-row .btn {
+    width: auto;
+    min-height: 42px;
+    min-width: 0;
+    padding: 0 13px;
+    font-size: 12px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  .trust-row {
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    font-size: 10px;
+  }
+
+  .hero-table {
+    height: 300px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-table:after {
+    width: min(92vw, 420px);
+    height: 220px;
+  }
+
+  .ambient {
+    width: min(82vw, 330px);
+    height: min(82vw, 330px);
+  }
+
+  .table-ring {
+    width: min(58vw, 240px);
+    height: min(38vw, 150px);
+  }
+
+  .hero-card {
+    width: 88px;
+    height: 124px;
+    border-radius: 11px;
+    padding: 9px;
+    font-size: 20px;
+  }
+
+  .hero-card span:last-child {
+    font-size: 34px;
+  }
+
+  .tilt-a { transform: rotate(-18deg) translate(-85px,-8px); }
+  .tilt-b { transform: rotate(8deg) translate(8px,-12px); }
+  .tilt-c { transform: rotate(22deg) translate(95px,14px); }
+
+  .creator-marquee {
+    margin-top: 18px;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 380px) {
+  .page-shell {
+    width: calc(100% - 20px);
+  }
+
+  .landing {
+    padding-top: 22px;
+    gap: 20px;
+  }
+
+  .cta-row {
+    gap: 6px;
+  }
+
+  .cta-row .btn {
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .hero-table {
+    height: 270px;
+  }
+
+  .hero-card {
+    width: 76px;
+    height: 108px;
+    font-size: 18px;
+  }
+
+  .hero-card span:last-child {
+    font-size: 30px;
+  }
+
+  .tilt-a { transform: rotate(-18deg) translate(-72px,-5px); }
+  .tilt-c { transform: rotate(22deg) translate(80px,10px); }
+}

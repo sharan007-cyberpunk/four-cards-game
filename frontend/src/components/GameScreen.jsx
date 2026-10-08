@@ -395,7 +395,7 @@ function GameScreen({room, state, privateState, socket, error, setError}) {
 
 function VoicePanel({voice, players, room}) {
   const humans = players.filter(
-    p => !p.bot && p.id !== room.playerId && p.status === 'CONNECTED'
+    p => !p.bot && p.id !== room.playerId && (p.status === 'CONNECTED' || p.status === 'ELIMINATED')
   );
 
   return (
@@ -636,13 +636,7 @@ function RoundResult({state, room, action}) {
           ))}
         </div>
 
-        {me?.host && state.phase === 'ROUND_RESULT' && (
-          <button className="btn primary wide" onClick={() => action('next')}>
-            Next round <span>→</span>
-          </button>
-        )}
-
-        <small>Round score shows the points added this round. Cumulative is the total score.</small>
+        <small>Next round starts automatically after 5 seconds. Round score shows the points added this round. Cumulative is the total score.</small>
       </div>
     </div>
   );
