@@ -15,5 +15,3 @@ server:
 app:
   cors-origins: ${CORS_ORIGINS:http://localhost:5173}
   opening-seconds: 10
-  turn-seconds: ${TURN_SECONDS:15}
-  disconnect-grace-seconds: ${DISCONNECT_GRACE_SECONDS:10}

@@ -5,8 +5,6 @@ import com.fourcards.dto.*; import com.fourcards.service.GameService; import jak
  @PostMapping("/{code}/join") public RoomResponse join(@PathVariable String code,@Valid @RequestBody JoinGameRequest r){return service.join(code,r.playerName());}
  @PostMapping("/{code}/reconnect") public ResponseEntity<Void> reconnect(@PathVariable String code,@RequestBody ReconnectRequest r){service.reconnect(code,r.playerId());return ResponseEntity.noContent().build();}
  @GetMapping("/{code}") public PublicGameState room(@PathVariable String code){return service.publicState(code);}
- @PutMapping("/{code}/settings/timer") public ResponseEntity<Void> timer(@PathVariable String code,@RequestParam String playerId,@RequestParam int value){service.setTurnSeconds(code,playerId,value);return ResponseEntity.noContent().build();}
- @PutMapping("/{code}/settings/hand-scores") public ResponseEntity<Void> handScores(@PathVariable String code,@RequestParam String playerId,@RequestParam boolean enabled){service.setShowHandScores(code,playerId,enabled);return ResponseEntity.noContent().build();}
  @PutMapping("/{code}/settings/target") public ResponseEntity<Void> target(@PathVariable String code,@RequestParam String playerId,@RequestParam int value){service.setTarget(code,playerId,value);return ResponseEntity.noContent().build();}
  @PostMapping("/{code}/start") public ResponseEntity<Void> start(@PathVariable String code,@RequestBody StartGameRequest r){service.start(code,r.playerId());return ResponseEntity.noContent().build();}
 }
